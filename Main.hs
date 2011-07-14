@@ -56,15 +56,15 @@ sendFile fp = handle skipFile $ do
 
     resp <- sendObject myConnection obj
 
-    putStrLn $ case resp of
-        Left  e -> show e
-        Right _ -> "Sent " ++ fp
+    case resp of
+        Left  e -> hPutStrLn stderr $ show e
+        Right _ -> putStrLn $ "Sent " ++ fp
 
 getFile :: FilePath -> IO ()
 getFile fp = handle skipFile $ do
     resp <- getObject myConnection $ skel fp
     case resp of
-        Left  e   -> putStrLn $ show e
+        Left  e   -> hPutStrLn stderr $ show e
         Right obj -> do
             B.writeFile fp (obj_data obj)
             putStrLn $ "Created " ++ fp
