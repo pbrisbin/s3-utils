@@ -4,10 +4,10 @@ Simple push/pull access to your Amazon S3 storage.
 
 ### Goal
 
-The eventual goal it so provide a smart off-site backup tool utilizing 
-Amazon's S3 cloud storage. This tool would need to behave like rsync and 
-have a focus on cutting unnecessary data transfer (since you pay by the 
-byte).
+The eventual goal is to provide a smart off-site backup tool utilizing 
+Amazon's S3 cloud storage. This tool would need to behave like `rsync` 
+and have a focus on cutting unnecessary data transfer (since you pay by 
+the byte).
 
 Currently one can use this tool to push files or directories up to a 
 bucket or pull files down from a bucket.
