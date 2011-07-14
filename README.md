@@ -75,13 +75,13 @@ was passed.
 
 Here are some examples to clarify:
 
-
+~~~ 
 Path        Read-written on filesystem   Read-written on S3
 -----      ---------------------------  -------------------
 ./foo                            ./foo         myBucket/foo
 ../bar                          ../bar         myBucket/bar
 /some/dir                    /some/dir    myBucket/some/dir
-
+~~~
 
 ### Thanks
 
