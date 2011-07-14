@@ -67,7 +67,7 @@ getFile fp = handle skipFile $ do
         Left  e   -> hPutStrLn stderr $ show e
         Right obj -> do
             B.writeFile fp (obj_data obj)
-            putStrLn $ "Created " ++ fp
+            putStrLn $ "Wrote " ++ fp
 
     where
         skel :: FilePath -> S3Object
