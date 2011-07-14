@@ -1,4 +1,3 @@
-s3
-Config.hs
+s3cp
 *.hi
 *.o
