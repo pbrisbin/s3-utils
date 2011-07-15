@@ -1,0 +1,11 @@
+Name:                s3-utils
+Version:             0.0
+Synopsis:            core-utils for an S3 instance
+Description:         core-utils for an S3 instance
+License:             GPL
+Author:              Patrick Brisbin
+Maintainer:          Patrick Brisbin <me@pbrisbin.com>
+Build-type:          Simple
+Build-Depends:       base, directory, filepath, bytestring, hS3, wai-app-static
+Executable:          s3cp
+Main-is:             s3cp.hs

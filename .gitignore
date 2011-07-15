@@ -1,3 +1,4 @@
 s3cp
 *.hi
 *.o
+dist/*
