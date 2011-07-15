@@ -35,22 +35,17 @@ parseArgs args =
 copy :: Arg -> Arg -> IO ()
 
 -- Copy the bucket file to the local destination
---
--- todo: if bucket dest is a directory, copy it and its contents
---
 copy (R remote) (L local) = do
     mconn <- amazonS3ConnectionFromEnv
     case mconn of
-        Just conn -> getFile conn remote local
+        Just conn -> do
+            isDirectory <- remoteIsDirectory conn remote
+            if isDirectory
+                then getDirectory conn remote local
+                else getFile conn remote local
         _         -> hPutStrLn stderr errorEnvNotSet
 
 -- Copy the local file(s) up to the bucket
---
--- todo: s3cp foo.txt bucket:foo.txt should create bucket/foo.txt
---       s3cp foo.txt bucket:bar     should create bucket/bar/foo.txt
---
---       but there's no way to tell the user's intention
---
 copy (L local) (R remote) = do
     mconn <- amazonS3ConnectionFromEnv
     case mconn of
