@@ -2,7 +2,6 @@ module Main where
 
 import Network.AWS.AWSConnection
 import Network.AWS.Utils
-import Network.Wai.Application.Static (defaultMimeTypeByExt)
 
 import Control.Monad      (forM_)
 import System.Directory   (doesDirectoryExist)
@@ -19,8 +18,8 @@ main = do
 -- TODO: help message
 usage :: IO ()
 usage = putStrLn $ unlines
-    [ "usage: s3cp <path> ... bucket:<path>"
-    , "       s3cp bucket:<path> ... <path>"
+    [ "usage: s3cp <path> ... bucket:[<path>]"
+    , "       s3cp <bucket:path> ... <path>  "
     ]
 
 parseArgs :: [String] -> Maybe ([Arg], Arg)

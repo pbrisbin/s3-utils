@@ -16,14 +16,13 @@ module Network.AWS.Utils
 import Network.AWS.AWSConnection
 import Network.AWS.AWSResult
 import Network.AWS.S3Object
+import Network.Wai.Application.Static (defaultMimeTypeByExt)
 
 import Control.Exception  (IOException, handle)
 import Control.Monad      (forM)
 import System.Directory   (doesFileExist, doesDirectoryExist, getDirectoryContents)
-import System.Environment (getArgs)
-import System.FilePath    ((</>))
+import System.FilePath    (splitFileName, (</>))
 import System.IO          (hPutStrLn, stderr)
-import Network.Wai.Application.Static (defaultMimeTypeByExt)
 
 import qualified Data.ByteString.Lazy       as B
 import qualified Data.ByteString.Lazy.Char8 as L8
@@ -48,6 +47,10 @@ data Arg = L Local | R Remote
 -- | Uploads the local file to the remote location, prints any errors to 
 --   stdout
 putFile :: AWSConnection -> Local -> Remote -> IO ()
+putFile aws local@(Local fpFrom) (Remote b "") = do
+    let fpTo = snd $ splitFileName fpFrom
+    putFile aws local (Remote b fpTo)
+
 putFile aws (Local fpFrom) (Remote b fpTo) = handle skipFile $ do
     obj <- do
         fileData <- B.readFile fpFrom
