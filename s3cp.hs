@@ -57,7 +57,7 @@ copy (L local) (R remote) = do
         Just conn -> do
             isDirectory <- doesDirectoryExist $ filePath local
             if isDirectory
-                then mapDirectory (filePath local ) $ \fp -> copy (L $ Local fp) (R remote)
+                then mapDirectory (filePath local) $ \fp -> putFile conn (Local fp) remote
                 else putFile conn local remote
         _ -> hPutStrLn stderr errorEnvNotSet
 
