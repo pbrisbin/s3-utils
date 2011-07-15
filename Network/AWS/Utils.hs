@@ -1,14 +1,21 @@
--- TODO: limit exports
 module Network.AWS.Utils
-    ( Bucket
+    ( 
+    -- * Types
+      Bucket
     , Local(..)
     , Remote(..)
+    , Arg(..)
+
+    -- * Actions
     , putFile
     , getFile
+
+    -- * Helpers
     , mapDirectory
-    , Arg(..)
     , parseArg
     , allSameType
+
+    -- * Error messages
     , errorInvalidArgs
     , errorEnvNotSet
     ) where
@@ -19,7 +26,7 @@ import Network.AWS.S3Object
 import Network.Wai.Application.Static (defaultMimeTypeByExt)
 
 import Control.Exception  (IOException, handle)
-import Control.Monad      (forM)
+import Control.Monad      (forM_)
 import System.Directory   (doesFileExist, doesDirectoryExist, getDirectoryContents)
 import System.FilePath    (splitFileName, (</>))
 import System.IO          (hPutStrLn, stderr)
@@ -35,7 +42,7 @@ data Local = Local
     { filePath :: FilePath
     }
 
--- | A file "in the cloud"
+-- | A file \"in the cloud\"
 data Remote = Remote
     { bucket :: Bucket
     , path   :: FilePath
@@ -48,7 +55,9 @@ data Arg = L Local | R Remote
 --   stdout
 putFile :: AWSConnection -> Local -> Remote -> IO ()
 putFile aws local@(Local fpFrom) (Remote b "") = do
-    let fpTo = snd $ splitFileName fpFrom
+    -- an empty bucket path should put basename of the from file into 
+    -- the top level of the bucket
+    let fpTo = baseName fpFrom
     putFile aws local (Remote b fpTo)
 
 putFile aws (Local fpFrom) (Remote b fpTo) = handle skipFile $ do
@@ -71,39 +80,33 @@ putFile aws (Local fpFrom) (Remote b fpTo) = handle skipFile $ do
 --   to stdout
 getFile :: AWSConnection -> Remote -> Local -> IO ()
 getFile aws (Remote b fpFrom) (Local fpTo) = handle skipFile $ do
+    -- if fpTo is a directory, put basename of the the from file into 
+    -- that directory
+    isDirectory <- doesDirectoryExist fpTo
+    let fpTo' = if isDirectory then baseName fpFrom else fpTo
+
     -- a skeleton object, identifies the file by bucket/path
     let obj = S3Object b fpFrom "" [] (L8.pack "")
     resp <- getObject aws obj
     case resp of
         Left e     -> hPutStrLn stderr $ show e
-        Right obj' -> B.writeFile fpTo (obj_data obj')
-
-{-strip :: FilePath -> FilePath-}
-{-strip ('/':rest)         = strip rest-}
-{-strip ('.':'/':rest)     = strip rest-}
-{-strip ('.':'.':'/':rest) = strip rest-}
-{-strip x                  = x-}
+        Right obj' -> B.writeFile fpTo' (obj_data obj')
 
 skipFile :: IOException -> IO ()
 skipFile e = hPutStrLn stderr $ show e
 
-mapDirectory :: FilePath -> (FilePath -> IO ()) -> IO ()
-mapDirectory fp f = do
-    paths <- walkDirectory fp
-    mapM_ f paths
+baseName :: FilePath -> FilePath
+baseName = snd . splitFileName
 
-walkDirectory :: FilePath -> IO [FilePath]
-walkDirectory dir = handle skipDir $ do
+-- | Recursively execute a function on all files in the passed directory
+mapDirectory :: FilePath -> (FilePath -> IO ()) -> IO ()
+mapDirectory dir f = do
     names <- getDirectoryContents dir
     let pnames = filter (`notElem` [".", ".."]) names
-    paths <- forM pnames $ \name -> do
+    forM_ pnames $ \name -> do
         let path = dir </> name
         isDirectory <- doesDirectoryExist path
-        if isDirectory
-            then walkDirectory path
-            else return [path]
-
-    return $ concat paths
+        if isDirectory then mapDirectory path f else f path
 
     where
         -- skip unreadable dirs
@@ -137,8 +140,10 @@ sameAs (L _) (L _) = True
 sameAs (R _) (R _) = True
 sameAs _     _     = False
 
+-- | Invalid arguments for operation
 errorInvalidArgs :: String
 errorInvalidArgs = "Invalid arguments for operation"
 
+-- | AWS environment variables are not set
 errorEnvNotSet :: String
-errorEnvNotSet= "AWS environment variables are not set"
+errorEnvNotSet = "AWS environment variables are not set"
