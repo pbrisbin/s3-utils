@@ -1,4 +1,15 @@
-module Main where
+-- TODO: limit exports
+module Network.AWS.Utils
+    ( Bucket
+    , Local(..)
+    , Remote(..)
+    , putFile
+    , getFile
+    , mapDirectory
+    , walkDirectory
+    , errorInvalidArgs
+    , errorEnvNotSet
+    ) where
 
 import Network.AWS.AWSConnection
 import Network.AWS.AWSResult
@@ -18,51 +29,21 @@ import qualified Data.ByteString.Char8      as C8
 
 type Bucket = String
 
-data Source = SBucket Bucket FilePath
-            | SLocal [FilePath]
+-- | A file or directory on the local system
+data Local = Local
+    { filePath :: FilePath
+    }
 
-data Destination = DBucket Bucket FilePath
-                 | DLocal FilePath
+-- | A file "in the cloud"
+data Remote = Remote
+    { bucket :: Bucket
+    , path   :: FilePath
+    }
 
-main :: IO ()
-main = undefined
-
-s3cp :: Source -> Destination -> IO (AWSResult ())
-
--- Copy the bucket files to the local destination
---
--- todo: if bucket dest is a directory, copy it and it's contents
---
-s3cp (SBucket b bfp) (DLocal fp) = do
-    mconn <- amazonS3ConnectionFromEnv
-    case mconn of
-        Just conn -> do
-            getFile conn b (strip bfp) fp
-            return $ Right ()
-        _         -> return $ Left awsEnvNotSet
-
--- Copy the local file(s) up to the bucket
---
--- todo: s3cp foo.txt bucket:foo.txt should create bucket/foo.txt
---       s3cp foo.txt bucket:bar     should create bucket/bar/foo.txt
---
---       but there's no way to tell the user's intention
---
-s3cp (SLocal fps) (DBucket b bfp) = do
-    mconn <- amazonS3ConnectionFromEnv
-    case mconn of
-        Just conn -> do
-            _ <- forM fps $ \fp -> do
-                let ffp = strip bfp </> fp
-                putFile conn b fp ffp
-            return $ Right ()
-        _ -> return $ Left awsEnvNotSet
-
--- invalid usage, throw error
-s3cp _ _ = return $ Left awsInvalidArgs
-
-putFile :: AWSConnection -> Bucket -> FilePath -> FilePath -> IO ()
-putFile aws b fpFrom fpTo = handle skipFile $ do
+-- | Uploads the local file to the remote location, prints any errors to 
+--   stdout
+putFile :: AWSConnection -> Local -> Remote -> IO ()
+putFile aws (Local fpFrom) (Remote b fpTo) = handle skipFile $ do
     obj <- do
         fileData <- B.readFile fpFrom
         return S3Object
@@ -76,10 +57,12 @@ putFile aws b fpFrom fpTo = handle skipFile $ do
 
     case resp of
         Left e  -> hPutStrLn stderr $ show e
-        Right _ -> return () -- todo: -v option
+        Right _ -> return ()
     
-getFile :: AWSConnection -> Bucket -> FilePath -> FilePath -> IO ()
-getFile aws b fpFrom fpTo = handle skipFile $ do
+-- | Downloads the remote file to the local location, prints any errors 
+--   to stdout
+getFile :: AWSConnection -> Remote -> Local -> IO ()
+getFile aws (Remote b fpFrom) (Local fpTo) = handle skipFile $ do
     -- a skeleton object, identifies the file by bucket/path
     let obj = S3Object b fpFrom "" [] (L8.pack "")
     resp <- getObject aws obj
@@ -97,6 +80,11 @@ strip x                  = x
 
 skipFile :: IOException -> IO ()
 skipFile e = hPutStrLn stderr $ show e
+
+mapDirectory :: FilePath -> (FilePath -> IO ()) -> IO ()
+mapDirectory fp f = do
+    paths <- walkDirectory fp
+    mapM_ f paths
 
 walkDirectory :: FilePath -> IO [FilePath]
 walkDirectory dir = handle skipDir $ do
@@ -118,9 +106,8 @@ walkDirectory dir = handle skipDir $ do
             hPutStrLn stderr $ show e
             return []
 
--- custom errors
-awsInvalidArgs :: ReqError
-awsInvalidArgs = AWSError "" "Arguments for copy are invalid"
+errorInvalidArgs :: ReqError
+errorInvalidArgs = AWSError "" "Invalid arguments for operation"
 
-awsEnvNotSet :: ReqError
-awsEnvNotSet= AWSError "" "AWS environment variables are not set"
+errorEnvNotSet :: ReqError
+errorEnvNotSet= AWSError "" "AWS environment variables are not set"
