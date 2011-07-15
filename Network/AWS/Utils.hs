@@ -6,7 +6,9 @@ module Network.AWS.Utils
     , putFile
     , getFile
     , mapDirectory
-    , walkDirectory
+    , Arg(..)
+    , parseArg
+    , allSameType
     , errorInvalidArgs
     , errorEnvNotSet
     ) where
@@ -40,6 +42,9 @@ data Remote = Remote
     , path   :: FilePath
     }
 
+-- | An argument to a file processing command, can be local or remote
+data Arg = L Local | R Remote
+
 -- | Uploads the local file to the remote location, prints any errors to 
 --   stdout
 putFile :: AWSConnection -> Local -> Remote -> IO ()
@@ -67,16 +72,14 @@ getFile aws (Remote b fpFrom) (Local fpTo) = handle skipFile $ do
     let obj = S3Object b fpFrom "" [] (L8.pack "")
     resp <- getObject aws obj
     case resp of
-        Left e -> hPutStrLn stderr $ show e
-        Right ob -> do
-            B.writeFile fpTo (obj_data obj)
-            -- todo: -v option
+        Left e     -> hPutStrLn stderr $ show e
+        Right obj' -> B.writeFile fpTo (obj_data obj')
 
-strip :: FilePath -> FilePath
-strip ('/':rest)         = strip rest
-strip ('.':'/':rest)     = strip rest
-strip ('.':'.':'/':rest) = strip rest
-strip x                  = x
+{-strip :: FilePath -> FilePath-}
+{-strip ('/':rest)         = strip rest-}
+{-strip ('.':'/':rest)     = strip rest-}
+{-strip ('.':'.':'/':rest) = strip rest-}
+{-strip x                  = x-}
 
 skipFile :: IOException -> IO ()
 skipFile e = hPutStrLn stderr $ show e
@@ -106,8 +109,33 @@ walkDirectory dir = handle skipDir $ do
             hPutStrLn stderr $ show e
             return []
 
-errorInvalidArgs :: ReqError
-errorInvalidArgs = AWSError "" "Invalid arguments for operation"
+-- | Presense of a colon means remote arg, break it; else, it's a local 
+--   filepath. TODO: be smarter about that.
+parseArg :: String -> Arg
+parseArg arg = let bucket = takeWhile (/= ':') arg
+                   len = length bucket
+               in if len == length arg
+                    then L $ Local arg -- local filepath
+                    else R . Remote bucket . fix $ drop (len+1) arg
 
-errorEnvNotSet :: ReqError
-errorEnvNotSet= AWSError "" "AWS environment variables are not set"
+    where
+        fix :: String -> String
+        fix ('/':rest) = fix rest
+        fix x          = x
+
+-- | Validate that a list of arguments are all local or all remote
+allSameType :: [Arg] -> Bool
+allSameType []  = True
+allSameType [_] = True
+allSameType (a:b:rest) = a `sameAs` b && allSameType (b:rest)
+
+sameAs :: Arg -> Arg -> Bool
+sameAs (L _) (L _) = True
+sameAs (R _) (R _) = True
+sameAs _     _     = False
+
+errorInvalidArgs :: String
+errorInvalidArgs = "Invalid arguments for operation"
+
+errorEnvNotSet :: String
+errorEnvNotSet= "AWS environment variables are not set"

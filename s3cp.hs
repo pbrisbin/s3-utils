@@ -1,41 +1,49 @@
 module Main where
 
-import Network.AWS.Utils
-
 import Network.AWS.AWSConnection
-import Network.AWS.AWSResult
-import Network.AWS.S3Object
-
-import Control.Exception  (IOException, handle)
-import Control.Monad      (forM)
-import System.Directory   (doesFileExist, doesDirectoryExist, getDirectoryContents)
-import System.Environment (getArgs)
-import System.FilePath    ((</>))
-import System.IO          (hPutStrLn, stderr)
+import Network.AWS.Utils
 import Network.Wai.Application.Static (defaultMimeTypeByExt)
 
-import qualified Data.ByteString.Lazy       as B
-import qualified Data.ByteString.Lazy.Char8 as L8
-import qualified Data.ByteString.Char8      as C8
-
-data CopyArg = L Local | R Remote
+import Control.Monad      (forM_)
+import System.Directory   (doesDirectoryExist)
+import System.Environment (getArgs)
+import System.IO          (hPutStrLn, stderr)
 
 main :: IO ()
-main = undefined
+main = do
+    args <- getArgs
+    case parseArgs args of
+        Just (srcs,dst) -> forM_ srcs $ \src -> copy src dst
+        _               -> usage
 
-copy :: CopyArg -> CopyArg -> IO (AWSResult ())
+-- TODO: help message
+usage :: IO ()
+usage = putStrLn $ unlines
+    [ "usage: s3cp <path> ... bucket:<path>"
+    , "       s3cp bucket:<path> ... <path>"
+    ]
 
--- Copy the bucket files to the local destination
+parseArgs :: [String] -> Maybe ([Arg], Arg)
+parseArgs []   = Nothing
+parseArgs [_]  = Nothing
+parseArgs args =
+    let cargs@(srcs,dst) = (,) (map parseArg $ init args) (parseArg $ last args)
+    in if allSameType srcs
+        then Just cargs
+        else Nothing
+
+-- | The copy operation
+copy :: Arg -> Arg -> IO ()
+
+-- Copy the bucket file to the local destination
 --
 -- todo: if bucket dest is a directory, copy it and its contents
 --
 copy (R remote) (L local) = do
     mconn <- amazonS3ConnectionFromEnv
     case mconn of
-        Just conn -> do
-            getFile conn remote local
-            return $ Right ()
-        _         -> return $ Left errorEnvNotSet
+        Just conn -> getFile conn remote local
+        _         -> hPutStrLn stderr errorEnvNotSet
 
 -- Copy the local file(s) up to the bucket
 --
@@ -50,12 +58,9 @@ copy (L local) (R remote) = do
         Just conn -> do
             isDirectory <- doesDirectoryExist $ filePath local
             if isDirectory
-                then mapDirectory (filePath local ) $ \fp -> do
-                    copy (L $ Local fp) (R remote)
-                    return ()
+                then mapDirectory (filePath local ) $ \fp -> copy (L $ Local fp) (R remote)
                 else putFile conn local remote
-            return $ Right ()
-        _ -> return $ Left errorEnvNotSet
+        _ -> hPutStrLn stderr errorEnvNotSet
 
--- TODO: support the other cases
-copy _ _ = return $ Left errorInvalidArgs
+-- TODO: support the other cases?
+copy _ _ = hPutStrLn stderr errorInvalidArgs
