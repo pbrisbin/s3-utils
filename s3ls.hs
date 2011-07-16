@@ -49,13 +49,28 @@ ls remote@(Remote _ fp) = do
         _ -> hPutStrLn stderr errorEnvNotSet
 
 printResult :: ListResult -> IO ()
-printResult (ListResult k m e s _) = putStrLn $ unwords [ m , e , pad 10 $ show s , k ]
+printResult (ListResult k m e s _) = putStrLn $ unwords [ m, e, prettySize s, k ]
+
     where
-        -- note, truncates values
+        -- print raw bytes in human readable
+        prettySize :: Integer -> String
+        prettySize s
+            | s >= 1000          && s < 1000000       = printFloat (fromIntegral s / 1024) "KB"
+            | s >= 1000000       && s < 1000000000    = printFloat (fromIntegral s / 1024 * 1024) "MB"
+            | s >= 1000000000    && s < 1000000000000 = printFloat (fromIntegral s / 1024 * 1024 * 1024) "GB"
+            | s >= 1000000000000                      = printFloat (fromIntegral s / 1024 * 1024 * 1024 * 1024) "TB"
+            | otherwise                               = printFloat (fromIntegral s) "B"
+
+        -- print a float to two decimals
+        printFloat ::  RealFrac a => a -> String -> String
+        printFloat n s = let (w,d) = properFraction n
+            in pad 10 $ show w ++ "." ++ (take 2 . drop 1 . dropWhile (/= '.') $ show d) ++ s
+
+        -- pads or trims a value to fit a certain number of characters
         pad :: Int -> String -> String
         pad lim str
             | length str > lim = take (lim - 3) str ++ "..."
             | otherwise        = let len = length str in
                 if length str < lim
-                    then str ++ replicate (lim - len) ' '
+                    then replicate (lim - len) ' ' ++ str
                     else str
