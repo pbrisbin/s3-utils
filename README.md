@@ -1,27 +1,6 @@
 # S3-utils
 
-core-utils for your S3 instance
-
-### Provided
-
-Done:
-
-~~~ 
-usage: s3ls <bucket:[path]> ...
-~~~
-
-~~~ 
-usage: s3rm <bucket:[path]> ...
-~~~
-
-~~~ 
-usage: s3cp <path> ... bucket:[<path>]
-       s3cp <bucket:path> ... <path>  
-~~~
-
-Todo:
-
-* `s3mv`
+Core-utils for your S3 instance.
 
 ### Installation
 
@@ -35,6 +14,34 @@ cd ./s3-utils && cabal install
 Export the environment variables `AWS_ACCESS_KEY_ID` and 
 `AWS_SECRET_ACCESS_KEY`.
 
+### Usage
+
+Downloading files: `s3cp <bucket:path> ... <path>`
+
+Uploading files: `s3cp <path> ... bucket:[<path>]`
+
+Moving remote files/buckets: `s3mv <bucket:[path]> ... <bucket:[path]>` *TODO*
+
+Removing remote files/buckets: `s3rm <bucket:[path]> ...`
+
+Listing remote files/buckets: `s3ls <bucket:[path]> ...`
+
+### Notes
+
+All commands print the files they're affecting; redirect to `/dev/null` 
+to silence this.
+
+All commands act recursively on directories (remote and local) but all 
+actions are (in the end) executed on a file-by-file basis.
+
+Any failures (permissions, connection, etc) will cause that file to be 
+skipped -- processing continues. This does not apply to errors due to 
+*invalid usage* or *unset environment variables*.
+
+In addition to the 5 binaries, this package also installs its module: 
+`Network.AWS.Utils`.
+
 ### You have been warned
 
-Very alpha. Beware bugs. Don't use on important data.
+It's working well in simple tests, but these tools are still very alpha. 
+Beware bugs and don't use with important data.
