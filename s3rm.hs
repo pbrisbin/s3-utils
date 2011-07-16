@@ -21,7 +21,7 @@ main = do
 usage :: IO ()
 usage = putStrLn "usage: s3rm <bucket:[path]> ..."
 
--- ls for remote dirs only
+-- rm for remote dirs only
 parseArgs :: [String] -> Maybe [Remote]
 parseArgs []   = Nothing
 parseArgs args = do
