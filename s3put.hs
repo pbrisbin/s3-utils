@@ -3,11 +3,13 @@ module Main where
 import Network.AWS.AWSConnection
 import Network.AWS.S3Object
 import Network.AWS.Utils
+import Network.Wai.Application.Static (defaultMimeTypeByExt)
 
 import Control.Monad (guard)
 import System.IO     (hPutStrLn, stderr)
 
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString.Lazy  as B
+import qualified Data.ByteString.Char8 as C8
 
 main :: IO ()
 main = handleArgs usage parseArgs put
@@ -45,7 +47,7 @@ put (Remote b fp) = do
                 return S3Object
                     { obj_bucket   = b
                     , obj_name     = fp
-                    , content_type = ""
+                    , content_type = C8.unpack $ defaultMimeTypeByExt fp
                     , obj_headers  = []
                     , obj_data     = fileData
                     }
