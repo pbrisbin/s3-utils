@@ -12,7 +12,7 @@ usage: s3cp <path> ... bucket:[<path>]
 ~~~
 
 ~~~ 
-usage: s3ls <bucket:path> ...
+usage: s3ls <bucket:[path]> ...
 ~~~
 
 Todo:
