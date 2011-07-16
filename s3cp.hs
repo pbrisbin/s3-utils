@@ -3,7 +3,7 @@ module Main where
 import Network.AWS.AWSConnection
 import Network.AWS.Utils
 
-import Control.Monad      (forM_)
+import Control.Monad      (forM_, guard)
 import System.Directory   (doesDirectoryExist)
 import System.Environment (getArgs)
 import System.IO          (hPutStrLn, stderr)
@@ -15,7 +15,6 @@ main = do
         Just (srcs,dst) -> forM_ srcs $ \src -> copy src dst
         _               -> usage
 
--- TODO: help message
 usage :: IO ()
 usage = putStrLn $ unlines
     [ "usage: s3cp <path> ... bucket:[<path>]"
@@ -25,16 +24,16 @@ usage = putStrLn $ unlines
 parseArgs :: [String] -> Maybe ([Arg], Arg)
 parseArgs []   = Nothing
 parseArgs [_]  = Nothing
-parseArgs args =
-    let cargs@(srcs,dst) = (,) (map parseArg $ init args) (parseArg $ last args)
-    in if allSameType srcs
-        then Just cargs
-        else Nothing
+parseArgs args = do
+    let srcs = map parseArg $ init args
+    let dst  =     parseArg $ last args
 
--- | The copy operation
+    -- all sources must be the same type
+    guard (allSame srcs)
+
+    return (srcs,dst)
+
 copy :: Arg -> Arg -> IO ()
-
--- Copy the bucket file to the local destination
 copy (R remote) (L local) = do
     mconn <- amazonS3ConnectionFromEnv
     case mconn of
@@ -43,17 +42,18 @@ copy (R remote) (L local) = do
             if isDirectory
                 then getDirectory conn remote local
                 else getFile conn remote local
-        _         -> hPutStrLn stderr errorEnvNotSet
 
--- Copy the local file(s) up to the bucket
+        _ -> hPutStrLn stderr errorEnvNotSet
+
 copy (L local) (R remote) = do
     mconn <- amazonS3ConnectionFromEnv
     case mconn of
         Just conn -> do
             isDirectory <- doesDirectoryExist $ filePath local
             if isDirectory
-                then mapDirectory (filePath local) $ \fp -> putFile conn (Local fp) remote
+                then putDirectory conn local remote
                 else putFile conn local remote
+
         _ -> hPutStrLn stderr errorEnvNotSet
 
 -- TODO: support the other cases?

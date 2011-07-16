@@ -8,13 +8,16 @@ module Network.AWS.Utils
 
     -- * Actions
     , putFile
+    , putDirectory
     , getFile
     , getDirectory
 
-    -- * Helpers
+    -- * Argument helpers
     , parseArg
-    , allSameType
-    , mapDirectory
+    , allSame
+    , allLocal
+    , allRemote
+    , sameAs
 
     -- * Remote helpers
     , remoteIsDirectory
@@ -46,9 +49,7 @@ import qualified Data.ByteString.Char8      as C8
 type Bucket = String
 
 -- | A file or directory on the local system
-data Local = Local
-    { filePath :: FilePath
-    }
+data Local = Local { filePath :: FilePath }
 
 -- | A file \"in the cloud\"
 data Remote = Remote
@@ -56,111 +57,105 @@ data Remote = Remote
     , path   :: FilePath
     }
 
--- | An argument to a file processing command, can be local or remote
+-- | Any argument to a file processing command
 data Arg = L Local | R Remote
 
--- | Uploads the local file to the remote location, prints any errors to 
---   stdout
-putFile :: AWSConnection -> Local -> Remote -> IO ()
-putFile aws local@(Local fpFrom) (Remote b "") = do
-    -- an empty bucket path should put basename of the from file into 
-    -- the top level of the bucket
+putFile :: AWSConnection
+        -> Local  -- ^ known to be a file
+        -> Remote -- ^ existing directory or new filename
+        -> IO ()
+putFile aws l@(Local fpFrom) (Remote b "") = do
+    -- an empty bucket path should place file at top level
     let fpTo = baseName fpFrom
-    putFile aws local (Remote b fpTo)
+    putFile aws l (Remote b fpTo)
 
-putFile aws (Local fpFrom) (Remote b fpTo) = handle skip $ do
+putFile aws l@(Local fpFrom) r@(Remote b fpTo) = handle skip $ do
+    fpTo' <- do
+        isDirectory <- remoteIsDirectory aws r
+        if isDirectory
+            then return $ fpTo </> baseName fpFrom
+            else return fpTo
+
     obj <- do
         fileData <- B.readFile fpFrom
         return S3Object
             { obj_bucket   = b
-            , obj_name     = fpTo
+            , obj_name     = fpTo'
             , content_type = C8.unpack $ defaultMimeTypeByExt fpFrom
             , obj_headers  = []
             , obj_data     = fileData
             }
-    resp <- sendObject aws obj
 
+    resp <- sendObject aws obj
     case resp of
         Left e  -> hPutStrLn stderr $ show e
         Right _ -> return ()
     
--- | Downloads the remote file to the local location, prints any errors 
---   to stdout
-getFile :: AWSConnection -> Remote -> Local -> IO ()
+getFile :: AWSConnection
+        -> Remote -- ^ known to be a file
+        -> Local  -- ^ existing directory or new filename
+        -> IO ()
 getFile aws (Remote b fpFrom) (Local fpTo) = handle skip $ do
-    --
-    -- handle the case where fpTo is a directory
-    --
-    -- s3cp b:etc/X11/xorg.conf ./
-    --
-    -- should write ./xorg.conf
-    --
     fpTo' <- do
         isDirectory <- doesDirectoryExist fpTo
         if isDirectory
             then return $ fpTo </> baseName fpFrom
             else return fpTo
 
-    --
-    -- handle the case of fpTo being a long path
-    --
-    -- s3cp b:etc/X11/xorg.conf ./etc.bak/X11/xorg.conf
-    --
-    -- should create all leading paths and write the file there
-    --
-    let (dir,_) = splitFileName fpTo
-    unless (null dir) $ createDirectoryIfMissing True dir
-
-    -- a skeleton object, identifies the file by bucket/path
-    let obj = S3Object b fpFrom "" [] (L8.pack "")
-    resp <- getObject aws obj
+    resp <- getObject aws $ S3Object b fpFrom "" [] (L8.pack "")
     case resp of
         Left e     -> hPutStrLn stderr $ show e
         Right obj' -> B.writeFile fpTo' (obj_data obj')
 
--- | Same but acts recursively on a directory
-getDirectory :: AWSConnection -> Remote -> Local -> IO ()
-getDirectory aws r@(Remote b fpFrom) (Local fpTo) = handle skip $ do
-    --
+getDirectory :: AWSConnection
+             -> Remote -- ^ known to be a directory
+             -> Local  -- ^ interpreted as a directory, can exist or not
+             -> IO ()
+getDirectory aws r@(Remote b fpFrom) l@(Local fpTo) = handle skip $ do
     -- copying a directory to a file is invalid usage
-    --
     isFile <- doesFileExist fpTo
-    when isFile $ hPutStrLn stderr errorInvalidArgs
+    when isFile $
+        hPutStrLn stderr errorInvalidArgs
 
-    --
-    -- handle the case were fpTo is a directory that does not exit
-    --
-    -- s3cp b:etc ./etc.bak
-    --
-    -- should create ./etc.bak then copy b:etc/* to ./etc.bak/
-    --
-    createDirectoryIfMissing True fpTo
+    -- directory exists
+    isDirectory <- doesDirectoryExist fpTo
+    when isDirectory $ do
+        remotes <- remoteListDirectory aws r
 
-    --
-    -- handle the case were fpTo is a directory that exists
-    --
-    -- s3cp b:etc/X11 /etc
-    --
-    -- should copy b:etc/X11/* into /etc/X11/
-    --
-    -- FIXME
-    --
+        forM_ remotes $ \remote -> do
+            let dst = fpTo </> path remote
+            let (dir,_) = splitFileName dst
+            createDirectoryIfMissing True dir
+            getFile aws remote (Local dst)
+        
+    -- directory does not exist
     remotes <- remoteListDirectory aws r
 
     forM_ remotes $ \remote -> do
-        let dst = fpTo </> fixFileName remote
+        let dst = fpTo </> (stripLeadingSlash $ stripPrefix fpFrom fpTo)
+        let (dir,_) = splitFileName dst
+        createDirectoryIfMissing True dir
         getFile aws remote (Local dst)
 
-    where
-        fixFileName :: Remote -> FilePath
-        fixFileName = stripLeadingSlash . stripPrefix fpFrom . path
+putDirectory :: AWSConnection
+             -> Local  -- ^ known to be a directory
+             -> Remote -- ^ interpreted as a directory, can exist or not
+             -> IO ()
+putDirectory aws l@(Local fpFrom) (Remote b "") = do
+    -- empty bucket should place the directory at top level
+    let fpTo = baseName fpFrom
+    putDirectory aws l (Remote b fpTo)
+    
+putDirectory aws (Local fpFrom) r@(Remote b fpTo) = do
+    -- directory exists
+    isDirectory <- remoteIsDirectory aws r
+    when isDirectory $
+        mapDirectory fpFrom $ \f -> putFile aws (Local f) r
 
-        stripPrefix :: String -> String -> String 
-        stripPrefix pref str =
-            if pref `isPrefixOf` str
-                then drop (length pref) str
-                else str
-
+    -- directory does not exist
+    mapDirectory fpFrom $ \f -> do
+        let dst = fpTo </> (stripLeadingSlash $ stripPrefix fpFrom f)
+        putFile aws (Local f) (Remote b dst)
 
 -- | Test if the remote argument is what we would consider a directory. 
 --   Beware sketchy algorithm ahead...
@@ -179,6 +174,7 @@ remoteListDirectory aws remote@(Remote b fp) = do
     results <- listDirectory "" aws remote
     return $ map (\res -> Remote b (key res)) results
 
+-- | Factored out for reuse
 listDirectory :: String -> AWSConnection -> Remote -> IO [ListResult]
 listDirectory marker aws remote@(Remote b fp) = do
     let req = ListRequest (addTrailingSlash fp) marker "" 1000
@@ -218,10 +214,22 @@ parseArg arg = let bucket = takeWhile (/= ':') arg
                     else R . Remote bucket . stripLeadingSlash $ drop (len+1) arg
 
 -- | Validate that a list of arguments are all local or all remote
-allSameType :: [Arg] -> Bool
-allSameType []  = True
-allSameType [_] = True
-allSameType (a:b:rest) = a `sameAs` b && allSameType (b:rest)
+allSame :: [Arg] -> Bool
+allSame []  = True
+allSame [_] = True
+allSame (a:b:rest) = a `sameAs` b && allSame (b:rest)
+
+allLocal :: [Arg] -> Bool
+allLocal = all local
+    where
+        local (L _) = True
+        local _     = False
+
+allRemote :: [Arg] -> Bool
+allRemote = all remote
+    where
+        remote (R _) = True
+        remote _     = False
 
 sameAs :: Arg -> Arg -> Bool
 sameAs (L _) (L _) = True
@@ -230,6 +238,12 @@ sameAs _     _     = False
 
 baseName :: FilePath -> FilePath
 baseName = snd . splitFileName
+
+stripPrefix :: String -> String -> String 
+stripPrefix pref str =
+    if pref `isPrefixOf` str
+        then drop (length pref) str
+        else str
 
 addTrailingSlash :: FilePath -> FilePath
 addTrailingSlash = reverse . addSlash . reverse
