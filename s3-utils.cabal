@@ -1,18 +1,33 @@
-Name:                s3-utils
-Version:             0.0.2
-Synopsis:            core-utils for an S3 instance
-Description:         core-utils for an S3 instance
-License:             GPL
-Author:              Patrick Brisbin
-Maintainer:          Patrick Brisbin <me@pbrisbin.com>
-Build-type:          Simple
-Build-Depends:       base, directory, filepath, bytestring, hS3, wai-app-static
+name:          s3-utils
+version:       0.1.0
+synopsis:      core-utils for an S3 instance
+description:   core-utils for an S3 instance
+license:       GPL
+author:        Patrick Brisbin
+maintainer:    Patrick Brisbin <me@pbrisbin.com>
+build-type:    Simple
+cabal-version: >=1.6
 
-Executable:          s3cp
-Main-is:             s3cp.hs
+library
+  build-depends:   base, directory, filepath, bytestring, hS3, wai-app-static
+  ghc-options:     -Wall
+  exposed-modules: Network.AWS.Utils
 
-Executable:          s3ls
-Main-is:             s3ls.hs
+executable s3cp
+  build-depends: base, directory, filepath, bytestring, hS3, wai-app-static
+  ghc-options:   -Wall
+  main-is:       s3cp.hs
 
-Executable:          s3rm
-Main-is:             s3rm.hs
+executable s3ls
+  build-depends: base, directory, filepath, bytestring, hS3, wai-app-static
+  ghc-options:   -Wall
+  main-is:       s3ls.hs
+
+executable s3rm
+  build-depends: base, directory, filepath, bytestring, hS3, wai-app-static
+  ghc-options:   -Wall
+  main-is:       s3rm.hs
+
+source-repository head
+  type:     git
+  location: git://github.com/pbrisbin/s3-utils.git
