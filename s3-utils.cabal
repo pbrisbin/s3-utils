@@ -28,6 +28,11 @@ executable s3rm
   ghc-options:   -Wall
   main-is:       s3rm.hs
 
+executable s3put
+  build-depends: base, directory, filepath, bytestring, hS3, wai-app-static
+  ghc-options:   -Wall
+  main-is:       s3put.hs
+
 source-repository head
   type:     git
   location: git://github.com/pbrisbin/s3-utils.git
