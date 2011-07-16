@@ -132,10 +132,10 @@ getDirectory aws r@(Remote _ fpFrom) (Local fpTo) = handle skip $ do
     where
         -- factor common logic
         go ::  AWSConnection -> Remote -> FilePath -> IO ()
-        go aws remote dst = do
-            let (dir,_) = splitFileName dst
+        go aws' remote' dst' = do
+            let (dir,_) = splitFileName dst'
             createDirectoryIfMissing True dir
-            getFile aws remote (Local dst)
+            getFile aws' remote' (Local dst')
 
 putDirectory :: AWSConnection
              -> Local  -- ^ known to be a directory
