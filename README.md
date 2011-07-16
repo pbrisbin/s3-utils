@@ -11,9 +11,12 @@ usage: s3cp <path> ... bucket:[<path>]
        s3cp <bucket:path> ... <path>  
 ~~~
 
+~~~ 
+usage: s3ls <bucket:path> ...
+~~~
+
 Todo:
 
-* `s3ls`
 * `s3mv`
 * `s3rm`
 
