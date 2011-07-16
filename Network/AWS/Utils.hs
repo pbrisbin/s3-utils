@@ -29,13 +29,12 @@ module Network.AWS.Utils
     ) where
 
 import Network.AWS.AWSConnection
-import Network.AWS.AWSResult
 import Network.AWS.S3Object
 import Network.AWS.S3Bucket
 import Network.Wai.Application.Static (defaultMimeTypeByExt)
 
 import Control.Exception  (IOException, handle)
-import Control.Monad      (forM_, when, unless)
+import Control.Monad      (forM_, when)
 import Data.List          (isPrefixOf)
 import System.FilePath    (splitFileName, (</>))
 import System.IO          (hPutStrLn, stderr)
@@ -69,7 +68,7 @@ putFile aws l@(Local fpFrom) (Remote b "") = do
     let fpTo = baseName fpFrom
     putFile aws l (Remote b fpTo)
 
-putFile aws l@(Local fpFrom) r@(Remote b fpTo) = handle skip $ do
+putFile aws (Local fpFrom) r@(Remote b fpTo) = handle skip $ do
     fpTo' <- do
         isDirectory <- remoteIsDirectory aws r
         if isDirectory
@@ -111,7 +110,7 @@ getDirectory :: AWSConnection
              -> Remote -- ^ known to be a directory
              -> Local  -- ^ interpreted as a directory, can exist or not
              -> IO ()
-getDirectory aws r@(Remote b fpFrom) l@(Local fpTo) = handle skip $ do
+getDirectory aws r@(Remote _ fpFrom) (Local fpTo) = handle skip $ do
     -- copying a directory to a file is invalid usage
     isFile <- doesFileExist fpTo
     when isFile $
@@ -164,20 +163,20 @@ remoteIsDirectory aws (Remote b fp) = do
     let req = ListRequest (addTrailingSlash fp) "" "" 1
     resp <- listObjects aws b req
     case resp of
-        Left  _            -> return False
-        Right (_, [])      -> return False
-        Right (_, results) -> return True
+        Left  _       -> return False
+        Right (_, []) -> return False
+        Right (_, _ ) -> return True
 
 -- | List the contents of a remote directory
 remoteListDirectory :: AWSConnection -> Remote -> IO [Remote]
-remoteListDirectory aws remote@(Remote b fp) = do
+remoteListDirectory aws remote@(Remote b _) = do
     results <- listDirectory "" aws remote
     return $ map (\res -> Remote b (key res)) results
 
 -- | Factored out for reuse
 listDirectory :: String -> AWSConnection -> Remote -> IO [ListResult]
-listDirectory marker aws remote@(Remote b fp) = do
-    let req = ListRequest (addTrailingSlash fp) marker "" 1000
+listDirectory m aws remote@(Remote b fp) = do
+    let req = ListRequest (addTrailingSlash fp) m "" 1000
     resp <- listObjects aws b req
     case resp of
         Left e -> do
@@ -200,18 +199,18 @@ mapDirectory dir f = handle skip $ do
     names <- getDirectoryContents dir
     let pnames = filter (`notElem` [".", ".."]) names
     forM_ pnames $ \name -> do
-        let path = dir </> name
-        isDirectory <- doesDirectoryExist path
-        if isDirectory then mapDirectory path f else f path
+        let p = dir </> name
+        isDirectory <- doesDirectoryExist p
+        if isDirectory then mapDirectory p f else f p
 
 -- | Presense of a colon means remote arg, break it; else, it's a local 
 --   filepath. TODO: be smarter about that.
 parseArg :: String -> Arg
-parseArg arg = let bucket = takeWhile (/= ':') arg
-                   len = length bucket
+parseArg arg = let b = takeWhile (/= ':') arg
+                   len = length b
                in if len == length arg
                     then L $ Local arg -- local filepath
-                    else R . Remote bucket . stripLeadingSlash $ drop (len+1) arg
+                    else R . Remote b . stripLeadingSlash $ drop (len+1) arg
 
 -- | Validate that a list of arguments are all local or all remote
 allSame :: [Arg] -> Bool
@@ -252,9 +251,6 @@ addTrailingSlash = reverse . addSlash . reverse
         addSlash :: FilePath -> FilePath
         addSlash s@('/':_) = s
         addSlash s         = '/':s
-
-removeTrailingSlash :: String -> String
-removeTrailingSlash = reverse . stripLeadingSlash . reverse
 
 stripLeadingSlash :: String -> String
 stripLeadingSlash ('/':rest) = stripLeadingSlash rest
