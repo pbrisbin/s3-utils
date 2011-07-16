@@ -5,18 +5,13 @@ import Network.AWS.S3Bucket
 import Network.AWS.S3Object
 import Network.AWS.Utils
 
-import Control.Monad      (guard, when)
-import System.Environment (getArgs)
-import System.IO          (hPutStrLn, stderr)
+import Control.Monad (guard)
+import System.IO     (hPutStrLn, stderr)
 
 import qualified Data.ByteString.Lazy.Char8 as L8
 
 main :: IO ()
-main = do
-    args <- getArgs
-    case parseArgs args of
-        Just remotes -> mapM_ rm remotes
-        _            -> usage
+main = handleArgs usage parseArgs $ mapM_ rm
 
 usage :: IO ()
 usage = putStrLn "usage: s3rm <bucket:[path]> ..."
@@ -40,27 +35,28 @@ rm remote@(Remote b fp) = do
     mconn <- amazonS3ConnectionFromEnv
     case mconn of
         Just conn -> do
-            when (null fp) $ do
-                -- remove the whole bucket
-                resp <- emptyBucket conn b
-                case resp of
-                    Left e  -> hPutStrLn stderr $ show e
-                    Right _ -> do
-                        resp' <- deleteBucket conn b
-                        case resp' of
-                            Left e  -> hPutStrLn stderr $ show e
-                            Right _ -> putStrLn $ "removed: " ++ b
-        
-            -- remove the file/dir
-            isDirectory <- remoteIsDirectory conn remote
-            if isDirectory
-                then do
-                    remotes <- remoteListDirectory conn remote
-                    mapM_ rm remotes
-                else do
-                    resp'' <- deleteObject conn $ S3Object b fp "" [] (L8.pack "")
-                    case resp'' of
+            if null fp
+
+                then do -- remove the whole bucket
+                    resp <- emptyBucket conn b
+                    case resp of
                         Left e  -> hPutStrLn stderr $ show e
-                        Right _ -> putStrLn $ "removed: " ++ b ++ ":" ++ fp
+                        Right _ -> do
+                            resp' <- deleteBucket conn b
+                            case resp' of
+                                Left e  -> hPutStrLn stderr $ show e
+                                Right _ -> putStrLn $ "removed: " ++ b ++ ":"
+
+                else do -- remove the file/dir
+                    isDirectory <- remoteIsDirectory conn remote
+                    if isDirectory
+                        then do
+                            remotes <- remoteListDirectory conn remote
+                            mapM_ rm remotes
+                        else do
+                            resp'' <- deleteObject conn $ S3Object b fp "" [] (L8.pack "")
+                            case resp'' of
+                                Left e  -> hPutStrLn stderr $ show e
+                                Right _ -> putStrLn $ "removed: " ++ b ++ ":" ++ fp
 
         _ -> hPutStrLn stderr errorEnvNotSet

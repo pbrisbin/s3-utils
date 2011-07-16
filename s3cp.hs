@@ -3,17 +3,13 @@ module Main where
 import Network.AWS.AWSConnection
 import Network.AWS.Utils
 
-import Control.Monad      (forM_, guard)
-import System.Directory   (doesDirectoryExist)
-import System.Environment (getArgs)
-import System.IO          (hPutStrLn, stderr)
+import Control.Monad    (forM_, guard)
+import System.Directory (doesDirectoryExist)
+import System.IO        (hPutStrLn, stderr)
 
 main :: IO ()
-main = do
-    args <- getArgs
-    case parseArgs args of
-        Just (srcs,dst) -> forM_ srcs $ \src -> copy src dst
-        _               -> usage
+main = handleArgs usage parseArgs $ \(srcs, dst) ->
+    forM_ srcs $ \src -> copy src dst
 
 usage :: IO ()
 usage = putStrLn $ unlines

@@ -4,16 +4,11 @@ import Network.AWS.AWSConnection
 import Network.AWS.S3Bucket
 import Network.AWS.Utils
 
-import Control.Monad      (guard)
-import System.Environment (getArgs)
-import System.IO          (hPutStrLn, stderr)
+import Control.Monad (guard)
+import System.IO     (hPutStrLn, stderr)
 
 main :: IO ()
-main = do
-    args <- getArgs
-    case parseArgs args of
-        Just remotes -> mapM_ ls remotes
-        _            -> usage
+main = handleArgs usage parseArgs $ mapM_ ls
 
 usage :: IO ()
 usage = putStrLn "usage: s3ls <bucket:[path]> ..."

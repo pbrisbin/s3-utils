@@ -14,6 +14,7 @@ module Network.AWS.Utils
     , listDirectory
 
     -- * Argument helpers
+    , handleArgs
     , parseArg
     , allSame
     , allLocal
@@ -35,8 +36,9 @@ import Network.AWS.S3Bucket
 import Network.Wai.Application.Static (defaultMimeTypeByExt)
 
 import Control.Exception  (IOException, handle)
-import Control.Monad      (forM_, when)
+import Control.Monad      (forM_, when, unless)
 import Data.List          (isPrefixOf)
+import System.Environment (getArgs)
 import System.FilePath    (splitFileName, (</>))
 import System.IO          (hPutStrLn, stderr)
 
@@ -116,8 +118,7 @@ getDirectory :: AWSConnection
 getDirectory aws r@(Remote _ fpFrom) (Local fpTo) = handle skip $ do
     -- copying a directory to a file is invalid usage
     isFile <- doesFileExist fpTo
-    when isFile $
-        hPutStrLn stderr errorInvalidArgs
+    when isFile $ hPutStrLn stderr errorInvalidArgs
 
     -- directory exists
     isDirectory <- doesDirectoryExist fpTo
@@ -127,9 +128,10 @@ getDirectory aws r@(Remote _ fpFrom) (Local fpTo) = handle skip $ do
             go aws remote $ fpTo </> path remote
         
     -- directory does not exist
-    remotes <- remoteListDirectory aws r
-    forM_ remotes $ \remote ->
-        go aws remote $ fpTo </> stripLeadingSlash (stripPrefix fpFrom fpTo)
+    unless (isFile || isDirectory) $ do
+        remotes <- remoteListDirectory aws r
+        forM_ remotes $ \remote ->
+            go aws remote $ fpTo </> stripLeadingSlash (stripPrefix fpFrom fpTo)
 
     where
         -- factor common logic
@@ -149,15 +151,12 @@ putDirectory aws l@(Local fpFrom) (Remote b "") = do
     putDirectory aws l (Remote b fpTo)
     
 putDirectory aws (Local fpFrom) r@(Remote b fpTo) = do
-    -- directory exists
     isDirectory <- remoteIsDirectory aws r
-    when isDirectory $
-        mapDirectory fpFrom $ \f -> putFile aws (Local f) r
-
-    -- directory does not exist
-    mapDirectory fpFrom $ \f -> do
-        let dst = fpTo </> stripLeadingSlash (stripPrefix fpFrom f)
-        putFile aws (Local f) (Remote b dst)
+    if isDirectory
+        then mapDirectory fpFrom $ \f -> putFile aws (Local f) r
+        else mapDirectory fpFrom $ \f -> do
+            let dst = fpTo </> stripLeadingSlash (stripPrefix fpFrom f)
+            putFile aws (Local f) (Remote b dst)
 
 -- | Test if the remote argument is what we would consider a directory. 
 --   Beware sketchy algorithm ahead...
@@ -238,6 +237,28 @@ allRemote = all remote
     where
         remote (R _) = True
         remote _     = False
+
+-- | Process command line args in a generic way
+handleArgs :: IO ()                 -- ^ a help message
+           -> ([String] -> Maybe a) -- ^ a parser to make the list of 
+                                    --   args into something useful
+           -> (a -> IO ())          -- ^ what to do with that value 
+                                    --   after it's parsed
+           -> IO ()
+handleArgs msg parser f = do
+    args <- getArgs
+    if helpFlagPresent args
+        then msg
+        else case parser args of
+            Just v -> f v
+            _      -> msg
+
+    where
+        helpFlagPresent :: [String] -> Bool
+        helpFlagPresent []           = False
+        helpFlagPresent ("-h":_)     = True
+        helpFlagPresent ("--help":_) = True
+        helpFlagPresent (_:rest)     = helpFlagPresent rest
 
 baseName :: FilePath -> FilePath
 baseName = snd . splitFileName

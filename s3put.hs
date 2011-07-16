@@ -4,18 +4,13 @@ import Network.AWS.AWSConnection
 import Network.AWS.S3Object
 import Network.AWS.Utils
 
-import Control.Monad      (guard)
-import System.Environment (getArgs)
-import System.IO          (hPutStrLn, stderr)
+import Control.Monad (guard)
+import System.IO     (hPutStrLn, stderr)
 
 import qualified Data.ByteString.Lazy as B
 
 main :: IO ()
-main = do
-    args <- getArgs
-    case parseArgs args of
-        Just r -> put r
-        _      -> usage
+main = handleArgs usage parseArgs put
 
 usage :: IO ()
 usage = putStrLn "usage: command | s3put <bucket:path>"
@@ -40,7 +35,7 @@ parseArgs [arg] = do
 parseArgs _ = Nothing
 
 put :: Remote -> IO ()
-put remote@(Remote b fp) = do
+put (Remote b fp) = do
     mconn <- amazonS3ConnectionFromEnv
     case mconn of
         Just conn -> do
