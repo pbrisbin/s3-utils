@@ -7,18 +7,21 @@ core-utils for your S3 instance
 Done:
 
 ~~~ 
-usage: s3cp <path> ... bucket:[<path>]
-       s3cp <bucket:path> ... <path>  
+usage: s3ls <bucket:[path]> ...
 ~~~
 
 ~~~ 
-usage: s3ls <bucket:[path]> ...
+usage: s3rm <bucket:[path]> ...
+~~~
+
+~~~ 
+usage: s3cp <path> ... bucket:[<path>]
+       s3cp <bucket:path> ... <path>  
 ~~~
 
 Todo:
 
 * `s3mv`
-* `s3rm`
 
 ### Installation
 
@@ -32,6 +35,6 @@ cd ./s3-utils && cabal install
 Export the environment variables `AWS_ACCESS_KEY_ID` and 
 `AWS_SECRET_ACCESS_KEY`.
 
-### Note
+### You have been warned
 
 Very alpha. Beware bugs. Don't use on important data.
