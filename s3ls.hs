@@ -16,7 +16,7 @@ main = do
         _            -> usage
 
 usage :: IO ()
-usage = undefined
+usage = putStrLn "usage: s3ls <bucket:path> ..."
 
 -- ls for remote dirs only
 parseArgs :: [String] -> Maybe [Remote]
