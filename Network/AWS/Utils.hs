@@ -11,6 +11,7 @@ module Network.AWS.Utils
     , putDirectory
     , getFile
     , getDirectory
+    , listDirectory
 
     -- * Argument helpers
     , parseArg
