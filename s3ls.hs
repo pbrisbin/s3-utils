@@ -38,7 +38,7 @@ ls remote@(Remote _ fp) = do
     case mconn of
         Just conn -> do
             isDirectory <- remoteIsDirectory conn remote
-            results <- if isDirectory
+            results <- if null fp || isDirectory
                 then listDirectory "" conn remote
                 else do
                     resp <- listDirectory "" conn remote

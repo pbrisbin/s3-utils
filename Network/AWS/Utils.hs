@@ -177,7 +177,8 @@ remoteListDirectory aws remote@(Remote b _) = do
 -- | Factored out for reuse
 listDirectory :: String -> AWSConnection -> Remote -> IO [ListResult]
 listDirectory m aws remote@(Remote b fp) = do
-    let req = ListRequest (addTrailingSlash fp) m "" 1000
+    let fp' = if null fp then fp else addTrailingSlash fp
+    let req = ListRequest fp' m "" 1000
     resp <- listObjects aws b req
     case resp of
         Left e -> do
