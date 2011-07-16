@@ -40,7 +40,7 @@ Any failures (permissions, connection, etc) will cause that file to be
 skipped -- processing continues. This does not apply to errors due to 
 *invalid usage* or *unset environment variables*.
 
-In addition to the 5 binaries, this package also installs its module: 
+In addition to the binaries, this package also installs its module: 
 `Network.AWS.Utils`.
 
 ### You have been warned
