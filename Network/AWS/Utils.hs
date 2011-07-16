@@ -120,21 +120,21 @@ getDirectory aws r@(Remote _ fpFrom) (Local fpTo) = handle skip $ do
     isDirectory <- doesDirectoryExist fpTo
     when isDirectory $ do
         remotes <- remoteListDirectory aws r
-
-        forM_ remotes $ \remote -> do
-            let dst = fpTo </> path remote
-            let (dir,_) = splitFileName dst
-            createDirectoryIfMissing True dir
-            getFile aws remote (Local dst)
+        forM_ remotes $ \remote ->
+            go aws remote $ fpTo </> path remote
         
     -- directory does not exist
     remotes <- remoteListDirectory aws r
+    forM_ remotes $ \remote ->
+        go aws remote $ fpTo </> stripLeadingSlash (stripPrefix fpFrom fpTo)
 
-    forM_ remotes $ \remote -> do
-        let dst = fpTo </> (stripLeadingSlash $ stripPrefix fpFrom fpTo)
-        let (dir,_) = splitFileName dst
-        createDirectoryIfMissing True dir
-        getFile aws remote (Local dst)
+    where
+        -- factor common logic
+        go ::  AWSConnection -> Remote -> FilePath -> IO ()
+        go aws remote dst = do
+            let (dir,_) = splitFileName dst
+            createDirectoryIfMissing True dir
+            getFile aws remote (Local dst)
 
 putDirectory :: AWSConnection
              -> Local  -- ^ known to be a directory
@@ -153,7 +153,7 @@ putDirectory aws (Local fpFrom) r@(Remote b fpTo) = do
 
     -- directory does not exist
     mapDirectory fpFrom $ \f -> do
-        let dst = fpTo </> (stripLeadingSlash $ stripPrefix fpFrom f)
+        let dst = fpTo </> stripLeadingSlash (stripPrefix fpFrom f)
         putFile aws (Local f) (Remote b dst)
 
 -- | Test if the remote argument is what we would consider a directory. 
@@ -171,7 +171,7 @@ remoteIsDirectory aws (Remote b fp) = do
 remoteListDirectory :: AWSConnection -> Remote -> IO [Remote]
 remoteListDirectory aws remote@(Remote b _) = do
     results <- listDirectory "" aws remote
-    return $ map (\res -> Remote b (key res)) results
+    return $ map (Remote b . key) results
 
 -- | Factored out for reuse
 listDirectory :: String -> AWSConnection -> Remote -> IO [ListResult]
@@ -185,7 +185,7 @@ listDirectory m aws remote@(Remote b fp) = do
 
         -- TODO: empty or directory not found?
         Right (_,     []     ) -> return []
-        Right (trunc, thisSet) -> do
+        Right (trunc, thisSet) ->
             if trunc
                 then do
                     let lastItem = key $ last thisSet
@@ -218,6 +218,11 @@ allSame []  = True
 allSame [_] = True
 allSame (a:b:rest) = a `sameAs` b && allSame (b:rest)
 
+sameAs :: Arg -> Arg -> Bool
+sameAs (L _) (L _) = True
+sameAs (R _) (R _) = True
+sameAs _     _     = False
+
 allLocal :: [Arg] -> Bool
 allLocal = all local
     where
@@ -230,11 +235,6 @@ allRemote = all remote
         remote (R _) = True
         remote _     = False
 
-sameAs :: Arg -> Arg -> Bool
-sameAs (L _) (L _) = True
-sameAs (R _) (R _) = True
-sameAs _     _     = False
-
 baseName :: FilePath -> FilePath
 baseName = snd . splitFileName
 
@@ -246,7 +246,6 @@ stripPrefix pref str =
 
 addTrailingSlash :: FilePath -> FilePath
 addTrailingSlash = reverse . addSlash . reverse
-
     where
         addSlash :: FilePath -> FilePath
         addSlash s@('/':_) = s
