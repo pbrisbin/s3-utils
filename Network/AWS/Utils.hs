@@ -89,7 +89,7 @@ putFile aws (Local fpFrom) r@(Remote b fpTo) = handle skip $ do
     resp <- sendObject aws obj
     case resp of
         Left e  -> hPutStrLn stderr $ show e
-        Right _ -> return ()
+        Right _ -> putStrLn $ fpFrom ++ " -> " ++ b ++ ":" ++ fpTo'
     
 getFile :: AWSConnection
         -> Remote -- ^ known to be a file
@@ -105,7 +105,9 @@ getFile aws (Remote b fpFrom) (Local fpTo) = handle skip $ do
     resp <- getObject aws $ S3Object b fpFrom "" [] (L8.pack "")
     case resp of
         Left e     -> hPutStrLn stderr $ show e
-        Right obj' -> B.writeFile fpTo' (obj_data obj')
+        Right obj' -> do
+            B.writeFile fpTo' (obj_data obj')
+            putStrLn $ b ++ ":" ++ fpFrom ++ " -> " ++ fpTo'
 
 getDirectory :: AWSConnection
              -> Remote -- ^ known to be a directory

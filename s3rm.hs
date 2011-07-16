@@ -49,7 +49,7 @@ rm remote@(Remote b fp) = do
                         resp' <- deleteBucket conn b
                         case resp' of
                             Left e  -> hPutStrLn stderr $ show e
-                            Right _ -> return ()
+                            Right _ -> putStrLn $ "removed: " ++ b
         
             -- remove the file/dir
             isDirectory <- remoteIsDirectory conn remote
@@ -61,6 +61,6 @@ rm remote@(Remote b fp) = do
                     resp'' <- deleteObject conn $ S3Object b fp "" [] (L8.pack "")
                     case resp'' of
                         Left e  -> hPutStrLn stderr $ show e
-                        Right _ -> return ()
+                        Right _ -> putStrLn $ "removed: " ++ b ++ ":" ++ fp
 
         _ -> hPutStrLn stderr errorEnvNotSet
