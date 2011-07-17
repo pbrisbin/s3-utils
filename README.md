@@ -18,7 +18,7 @@ Export the environment variables `AWS_ACCESS_KEY_ID` and
 
 Downloading files: `s3cp <bucket:path> ... <path>`
 
-Uploading files: `s3cp <path> ... bucket:[<path>]` *use `-` for stdin*
+Uploading files: `s3cp <path> ... bucket:[<path>]`
 
 Moving remote files/buckets: `s3mv <bucket:[path]> ... <bucket:[path]>` *TODO*
 
@@ -28,11 +28,14 @@ Listing remote files/buckets: `s3ls <bucket:[path]> ...`
 
 ### Notes
 
+Uploading will read from `stdin` if you use `-` as the source `<path>`.
+
 All commands print the files they're affecting; redirect to `/dev/null` 
 to silence this.
 
 All commands act recursively on directories (remote and local) but all 
-actions are (in the end) executed on a file-by-file basis.
+actions are (in the end) executed on a file-by-file basis. Copy commands 
+overwrite existing files.
 
 Any failures (permissions, connection, etc) will cause that file to be 
 skipped -- processing continues. This does not apply to errors due to 
