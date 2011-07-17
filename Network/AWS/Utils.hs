@@ -33,7 +33,6 @@ module Network.AWS.Utils
 import Network.AWS.AWSConnection
 import Network.AWS.S3Object
 import Network.AWS.S3Bucket
-import Network.Wai.Application.Static (defaultMimeTypeByExt)
 
 import Control.Exception  (IOException, handle)
 import Control.Monad      (forM_, when, unless)
@@ -44,6 +43,7 @@ import System.IO          (hPutStrLn, stderr)
 
 import System.Directory
 
+import qualified Data.Map as M
 import qualified Data.ByteString.Lazy       as B
 import qualified Data.ByteString.Lazy.Char8 as L8
 import qualified Data.ByteString.Char8      as C8
@@ -75,15 +75,19 @@ putFile aws (Local fpFrom) r@(Remote b fpTo) = handle skip $ do
     fpTo' <- do
         isDirectory <- remoteIsDirectory aws r
         if isDirectory
-            then return $ fpTo </> baseName fpFrom
+            then return $ if fpFrom == "-"
+                then fpTo </> "stdin.txt"
+                else fpTo </> baseName fpFrom
             else return fpTo
 
     obj <- do
-        fileData <- B.readFile fpFrom
+        fileData <- if fpFrom == "-"
+            then B.getContents -- stdin
+            else B.readFile fpFrom
         return S3Object
             { obj_bucket   = b
             , obj_name     = fpTo'
-            , content_type = C8.unpack $ defaultMimeTypeByExt fpFrom
+            , content_type = defaultMimeTypeByExt fpFrom
             , obj_headers  = []
             , obj_data     = fileData
             }
@@ -290,3 +294,98 @@ errorInvalidArgs = "Invalid arguments for operation"
 -- | AWS environment variables are not set
 errorEnvNotSet :: String
 errorEnvNotSet = "AWS environment variables are not set"
+
+--
+-- mime type code from wai-app-static v0.2.0 by Michael Snoyman, 
+-- reproduced here to prevent pulling in that dependency
+--
+--
+takeExtensions :: FilePath -> [String]
+takeExtensions s =
+    case break (== '.') s of
+        (_, '.':x) -> x : takeExtensions x
+        (_, _) -> []
+
+defaultMimeType :: String
+defaultMimeType = "application/octet-stream"
+
+-- taken from snap-core Snap.Util.FileServer
+defaultMimeTypes :: M.Map String String
+defaultMimeTypes = M.fromList
+    [ ( "apk"    , "application/vnd.android.package-archive" )
+    , ( "asc"    , "text/plain"                              )
+    , ( "asf"    , "video/x-ms-asf"                          )
+    , ( "asx"    , "video/x-ms-asf"                          )
+    , ( "avi"    , "video/x-msvideo"                         )
+    , ( "bz2"    , "application/x-bzip"                      )
+    , ( "c"      , "text/plain"                              )
+    , ( "class"  , "application/octet-stream"                )
+    , ( "conf"   , "text/plain"                              )
+    , ( "cpp"    , "text/plain"                              )
+    , ( "css"    , "text/css"                                )
+    , ( "cxx"    , "text/plain"                              )
+    , ( "dtd"    , "text/xml"                                )
+    , ( "dvi"    , "application/x-dvi"                       )
+    , ( "epub"   , "application/epub+zip"                    )
+    , ( "gif"    , "image/gif"                               )
+    , ( "gz"     , "application/x-gzip"                      )
+    , ( "hs"     , "text/plain"                              )
+    , ( "htm"    , "text/html"                               )
+    , ( "html"   , "text/html"                               )
+    , ( "ico"    , "image/vnd.microsoft.icon"                )
+    , ( "jar"    , "application/x-java-archive"              )
+    , ( "jpeg"   , "image/jpeg"                              )
+    , ( "jpg"    , "image/jpeg"                              )
+    , ( "js"     , "text/javascript"                         )
+    , ( "log"    , "text/plain"                              )
+    , ( "m3u"    , "audio/x-mpegurl"                         )
+    , ( "mov"    , "video/quicktime"                         )
+    , ( "mp3"    , "audio/mpeg"                              )
+    , ( "mpeg"   , "video/mpeg"                              )
+    , ( "mpg"    , "video/mpeg"                              )
+    , ( "ogg"    , "application/ogg"                         )
+    , ( "pac"    , "application/x-ns-proxy-autoconfig"       )
+    , ( "pdf"    , "application/pdf"                         )
+    , ( "png"    , "image/png"                               )
+    , ( "ps"     , "application/postscript"                  )
+    , ( "qt"     , "video/quicktime"                         )
+    , ( "sig"    , "application/pgp-signature"               )
+    , ( "spl"    , "application/futuresplash"                )
+    , ( "svg"    , "image/svg+xml"                           )
+    , ( "swf"    , "application/x-shockwave-flash"           )
+    , ( "tar"    , "application/x-tar"                       )
+    , ( "tar.bz2", "application/x-bzip-compressed-tar"       )
+    , ( "tbz2"   , "application/x-bzip-compressed-tar"       )
+    , ( "tgz"    , "application/x-tgz"                       )
+    , ( "tbz"    , "application/x-bzip-compressed-tar"       )
+    , ( "text"   , "text/plain"                              )
+    , ( "tgz"    , "application/x-tgz"                       )
+    , ( "torrent", "application/x-bittorrent"                )
+    , ( "ttf"    , "application/x-font-truetype"             )
+    , ( "txt"    , "text/plain"                              )
+    , ( "wav"    , "audio/x-wav"                             )
+    , ( "wax"    , "audio/x-ms-wax"                          )
+    , ( "wma"    , "audio/x-ms-wma"                          )
+    , ( "wmv"    , "video/x-ms-wmv"                          )
+    , ( "xbm"    , "image/x-xbitmap"                         )
+    , ( "xml"    , "text/xml"                                )
+    , ( "xpm"    , "image/x-xpixmap"                         )
+    , ( "xwd"    , "image/x-xwindowdump"                     )
+    , ( "zip"    , "application/zip"                         )
+    ]
+
+mimeTypeByExt :: M.Map String String
+              -> String
+              -> FilePath
+              -> String
+mimeTypeByExt mm def =
+    go . takeExtensions
+  where
+    go [] = def
+    go (e:es) =
+        case M.lookup e mm of
+            Nothing -> go es
+            Just mt -> mt
+
+defaultMimeTypeByExt :: FilePath -> String
+defaultMimeTypeByExt = mimeTypeByExt defaultMimeTypes defaultMimeType

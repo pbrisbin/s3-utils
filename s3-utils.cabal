@@ -1,5 +1,5 @@
 name:          s3-utils
-version:       0.1.0
+version:       0.0.0
 synopsis:      core-utils for an S3 instance
 description:   core-utils for an S3 instance
 license:       GPL
@@ -9,29 +9,24 @@ build-type:    Simple
 cabal-version: >=1.6
 
 library
-  build-depends:   base, directory, filepath, bytestring, hS3, wai-app-static
+  build-depends:   base, directory, filepath, bytestring, hS3
   ghc-options:     -Wall
   exposed-modules: Network.AWS.Utils
 
 executable s3cp
-  build-depends: base, directory, filepath, bytestring, hS3, wai-app-static
+  build-depends: base, directory, filepath, bytestring, hS3
   ghc-options:   -Wall
   main-is:       s3cp.hs
 
 executable s3ls
-  build-depends: base, directory, filepath, bytestring, hS3, wai-app-static
+  build-depends: base, directory, filepath, bytestring, hS3
   ghc-options:   -Wall
   main-is:       s3ls.hs
 
 executable s3rm
-  build-depends: base, directory, filepath, bytestring, hS3, wai-app-static
+  build-depends: base, directory, filepath, bytestring, hS3
   ghc-options:   -Wall
   main-is:       s3rm.hs
-
-executable s3put
-  build-depends: base, directory, filepath, bytestring, hS3, wai-app-static
-  ghc-options:   -Wall
-  main-is:       s3put.hs
 
 source-repository head
   type:     git
