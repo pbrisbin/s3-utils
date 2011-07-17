@@ -103,7 +103,7 @@ getFile :: AWSConnection
 getFile aws (Remote b fpFrom) (Local fpTo) = handle skip $ do
     fpTo' <- do
         isDirectory <- doesDirectoryExist fpTo
-        if isDirectory
+        if fpTo /= "-" && isDirectory
             then return $ fpTo </> baseName fpFrom
             else return fpTo
 
@@ -111,8 +111,11 @@ getFile aws (Remote b fpFrom) (Local fpTo) = handle skip $ do
     case resp of
         Left e     -> hPutStrLn stderr $ show e
         Right obj' -> do
-            B.writeFile fpTo' (obj_data obj')
-            putStrLn $ b ++ ":" ++ fpFrom ++ " -> " ++ fpTo'
+            if fpTo == "-"
+                then B.putStr (obj_data obj')
+                else do
+                    B.writeFile fpTo' (obj_data obj')
+                    putStrLn $ b ++ ":" ++ fpFrom ++ " -> " ++ fpTo'
 
 getDirectory :: AWSConnection
              -> Remote -- ^ known to be a directory
