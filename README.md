@@ -28,7 +28,8 @@ Listing remote files/buckets: `s3ls <bucket:[path]> ...`
 
 ### Notes
 
-Uploading will read from `stdin` if you use `-` as the source `<path>`.
+`s3cp` can read from `stdin` or write to `stdout` if you use `-` as the 
+`<path>` argument.
 
 All commands print the files they're affecting; redirect to `/dev/null` 
 to silence this.
