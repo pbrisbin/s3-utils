@@ -9,22 +9,22 @@ build-type:    Simple
 cabal-version: >=1.6
 
 library
-  build-depends:   base, directory, filepath, bytestring, hS3
+  build-depends:   base, containers, directory, filepath, bytestring, hS3
   ghc-options:     -Wall
   exposed-modules: Network.AWS.Utils
 
 executable s3cp
-  build-depends: base, directory, filepath, bytestring, hS3
+  build-depends: base, containers, directory, filepath, bytestring, hS3
   ghc-options:   -Wall
   main-is:       s3cp.hs
 
 executable s3ls
-  build-depends: base, directory, filepath, bytestring, hS3
+  build-depends: base, containers, directory, filepath, bytestring, hS3
   ghc-options:   -Wall
   main-is:       s3ls.hs
 
 executable s3rm
-  build-depends: base, directory, filepath, bytestring, hS3
+  build-depends: base, containers, directory, filepath, bytestring, hS3
   ghc-options:   -Wall
   main-is:       s3rm.hs
 

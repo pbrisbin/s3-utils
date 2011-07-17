@@ -43,10 +43,9 @@ import System.IO          (hPutStrLn, stderr)
 
 import System.Directory
 
-import qualified Data.Map as M
+import qualified Data.Map                   as M
 import qualified Data.ByteString.Lazy       as B
 import qualified Data.ByteString.Lazy.Char8 as L8
-import qualified Data.ByteString.Char8      as C8
 
 type Bucket = String
 
