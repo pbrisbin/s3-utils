@@ -1,11 +1,8 @@
 module Main where
 
-import Network.AWS.AWSConnection
 import Network.AWS.S3Bucket
 import Network.AWS.Utils
-
 import Control.Monad (guard)
-import System.IO     (hPutStrLn, stderr)
 
 main :: IO ()
 main = handleArgs usage parseArgs $ mapM_ ls
@@ -28,20 +25,15 @@ parseArgs args = do
         unRemote _          = undefined
 
 ls :: Remote -> IO ()
-ls remote@(Remote _ fp) = do
-    mconn <- amazonS3ConnectionFromEnv
-    case mconn of
-        Just conn -> do
-            isDirectory <- remoteIsDirectory conn remote
-            results <- if null fp || isDirectory
-                then listDirectory "" conn remote
-                else do
-                    resp <- listDirectory "" conn remote
-                    return $ filter ((== fp) . key) resp
+ls remote@(Remote _ fp) = withConnection $ \aws -> do
+    isDirectory <- remoteIsDirectory aws remote
+    results <- if null fp || isDirectory
+        then listDirectory "" aws remote
+        else do
+            resp <- listDirectory "" aws remote
+            return $ filter ((== fp) . key) resp
 
-            mapM_ printResult results
-
-        _ -> hPutStrLn stderr errorEnvNotSet
+    mapM_ printResult results
 
 printResult :: ListResult -> IO ()
 printResult (ListResult k m e s _) = putStrLn $ unwords [ m, e, prettySize s, k ]

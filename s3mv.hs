@@ -1,10 +1,7 @@
 module Main where
 
-import Network.AWS.AWSConnection
 import Network.AWS.Utils
-
 import Control.Monad (forM_, guard)
-import System.IO     (hPutStrLn, stderr)
 
 main :: IO ()
 main = handleArgs usage parseArgs $ \(srcs, dst) ->
@@ -26,10 +23,5 @@ parseArgs args = do
     return (srcs,dst)
 
 move :: Arg -> Arg -> IO ()
-move (R from) (R to) = do
-    mconn <- amazonS3ConnectionFromEnv
-    case mconn of
-        Just conn -> moveRemote conn from to
-        _         -> hPutStrLn stderr errorEnvNotSet
-
-move _ _ = hPutStrLn stderr errorInvalidArgs
+move (R from) (R to) = withConnection $ \aws -> moveRemote aws from to
+move _        _      = errorInvalidArgs

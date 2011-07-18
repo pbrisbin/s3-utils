@@ -1,10 +1,7 @@
 module Main where
 
-import Network.AWS.AWSConnection
 import Network.AWS.Utils
-
 import Control.Monad (guard)
-import System.IO     (hPutStrLn, stderr)
 
 main :: IO ()
 main = handleArgs usage parseArgs $ mapM_ rm
@@ -27,8 +24,4 @@ parseArgs args = do
         unRemote _          = undefined
 
 rm :: Remote -> IO ()
-rm remote = do
-    mconn <- amazonS3ConnectionFromEnv
-    case mconn of
-        Just conn -> removeRemote conn remote
-        _         -> hPutStrLn stderr errorEnvNotSet
+rm remote = withConnection $ \aws -> removeRemote aws remote

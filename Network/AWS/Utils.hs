@@ -3,6 +3,7 @@ module Network.AWS.Utils
     , Local(..)
     , Remote(..)
     , Arg(..)
+    , withConnection
 
     -- * Local <-> Remote actions
     , pushObject
@@ -355,6 +356,15 @@ handleArgs msg parser f = do
         helpFlagPresent ("--help":_) = True
         helpFlagPresent (_:rest)     = helpFlagPresent rest
 
+-- | Get the AWS keys from the environment and execute the action with 
+--   the connection. If the keys aren't set, error
+withConnection :: (AWSConnection -> IO ()) -> IO ()
+withConnection f = do
+    maws <- amazonS3ConnectionFromEnv
+    case maws of
+        Just aws -> f aws
+        _        -> errorEnvNotSet
+
 -- | Either show the error or call the function on the result
 handleError :: AWSResult a -> (a -> IO ()) -> IO ()
 handleError (Left e)  _ = hPutStrLn stderr $ prettyReqError e
@@ -384,12 +394,12 @@ skip :: IOException -> IO ()
 skip e = hPutStrLn stderr $ show e
 
 -- | Invalid arguments for operation
-errorInvalidArgs :: String
-errorInvalidArgs = "Invalid arguments for operation"
+errorInvalidArgs :: IO ()
+errorInvalidArgs = hPutStrLn stderr "Invalid arguments for operation"
 
 -- | AWS environment variables are not set
-errorEnvNotSet :: String
-errorEnvNotSet = "AWS environment variables are not set"
+errorEnvNotSet :: IO ()
+errorEnvNotSet = hPutStrLn stderr "AWS environment variables are not set"
 
 -- | Taken from pandoc, Text.Pandoc.Shared
 getMimeType :: FilePath -> String
