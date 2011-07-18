@@ -25,12 +25,14 @@ module Network.AWS.Utils
     , remoteIsDirectory
     , remoteListDirectory
 
-    -- * Error messages
+    -- * Error helpers
+    , handleError
     , errorInvalidArgs
     , errorEnvNotSet
     ) where
 
 import Network.AWS.AWSConnection
+import Network.AWS.AWSResult
 import Network.AWS.S3Object
 import Network.AWS.S3Bucket
 
@@ -92,9 +94,8 @@ putFile aws (Local fpFrom) r@(Remote b fpTo) = handle skip $ do
             }
 
     resp <- sendObject aws obj
-    case resp of
-        Left e  -> hPutStrLn stderr $ show e
-        Right _ -> putStrLn $ fpFrom ++ " -> " ++ b ++ ":" ++ fpTo'
+
+    handleError resp $ \_ -> putStrLn $ fpFrom ++ " -> " ++ b ++ ":" ++ fpTo'
     
 getFile :: AWSConnection
         -> Remote -- ^ known to be a file
@@ -108,14 +109,13 @@ getFile aws (Remote b fpFrom) (Local fpTo) = handle skip $ do
             else return fpTo
 
     resp <- getObject aws $ S3Object b fpFrom "" [] (L8.pack "")
-    case resp of
-        Left e     -> hPutStrLn stderr $ show e
-        Right obj' -> do
-            if fpTo == "-"
-                then B.putStr (obj_data obj')
-                else do
-                    B.writeFile fpTo' (obj_data obj')
-                    putStrLn $ b ++ ":" ++ fpFrom ++ " -> " ++ fpTo'
+
+    handleError resp $ \obj' -> do
+        if fpTo == "-"
+            then B.putStr (obj_data obj')
+            else do
+                B.writeFile fpTo' (obj_data obj')
+                putStrLn $ b ++ ":" ++ fpFrom ++ " -> " ++ fpTo'
 
 getDirectory :: AWSConnection
              -> Remote -- ^ known to be a directory
@@ -265,6 +265,11 @@ handleArgs msg parser f = do
         helpFlagPresent ("-h":_)     = True
         helpFlagPresent ("--help":_) = True
         helpFlagPresent (_:rest)     = helpFlagPresent rest
+
+-- | Either show the error or call the function on the result
+handleError :: AWSResult a -> (a -> IO ()) -> IO ()
+handleError (Left e)  _ = hPutStrLn stderr $ prettyReqError e
+handleError (Right v) f = f v
 
 baseName :: FilePath -> FilePath
 baseName = snd . splitFileName

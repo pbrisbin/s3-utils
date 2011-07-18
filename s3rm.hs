@@ -36,17 +36,11 @@ rm remote@(Remote b fp) = do
     case mconn of
         Just conn -> do
             if null fp
-
                 then do -- remove the whole bucket
                     resp <- emptyBucket conn b
-                    case resp of
-                        Left e  -> hPutStrLn stderr $ show e
-                        Right _ -> do
-                            resp' <- deleteBucket conn b
-                            case resp' of
-                                Left e  -> hPutStrLn stderr $ show e
-                                Right _ -> putStrLn $ "removed: " ++ b ++ ":"
-
+                    handleError resp $ \_ -> do
+                        resp' <- deleteBucket conn b
+                        handleError resp' $ \_ -> putStrLn $ "removed: " ++ b ++ ":"
                 else do -- remove the file/dir
                     isDirectory <- remoteIsDirectory conn remote
                     if isDirectory
@@ -55,8 +49,6 @@ rm remote@(Remote b fp) = do
                             mapM_ rm remotes
                         else do
                             resp'' <- deleteObject conn $ S3Object b fp "" [] (L8.pack "")
-                            case resp'' of
-                                Left e  -> hPutStrLn stderr $ show e
-                                Right _ -> putStrLn $ "removed: " ++ b ++ ":" ++ fp
+                            handleError resp'' $ \_ -> putStrLn $ "removed: " ++ b ++ ":" ++ fp
 
         _ -> hPutStrLn stderr errorEnvNotSet
