@@ -22,10 +22,10 @@ parseArgs args = do
     -- all sources must be the same type
     guard (allSame srcs)
 
-    return (srcs,dst)
+    return (srcs, dst)
 
 copy :: Arg -> Arg -> IO ()
 copy (R remote) (L local ) = withConnection $ \aws -> pullObject aws remote local
-copy (L local ) (R remote) = withConnection $ \aws -> pushObject aws local remote
-copy (R from  ) (R to    ) = withConnection $ \aws -> copyRemote aws from to
+copy (L local ) (R remote) = withConnection $ \aws -> pushObject aws local  remote
+copy (R from  ) (R to    ) = withConnection $ \aws -> copyRemote aws from   to
 copy _          _          = errorInvalidArgs

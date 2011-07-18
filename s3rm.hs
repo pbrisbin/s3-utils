@@ -9,7 +9,6 @@ main = handleArgs usage parseArgs $ mapM_ rm
 usage :: String
 usage = "usage: s3rm <bucket:[path]> ..."
 
--- rm for remote dirs only
 parseArgs :: [String] -> Maybe [Remote]
 parseArgs []   = Nothing
 parseArgs args = do
