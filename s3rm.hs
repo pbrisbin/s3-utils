@@ -6,8 +6,8 @@ import Control.Monad (guard)
 main :: IO ()
 main = handleArgs usage parseArgs $ mapM_ rm
 
-usage :: IO ()
-usage = putStrLn "usage: s3rm <bucket:[path]> ..."
+usage :: String
+usage = "usage: s3rm <bucket:[path]> ..."
 
 -- rm for remote dirs only
 parseArgs :: [String] -> Maybe [Remote]

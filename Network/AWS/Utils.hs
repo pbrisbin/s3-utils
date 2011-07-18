@@ -335,7 +335,7 @@ allRemote = all remote
         remote _     = False
 
 -- | Process command line args in a generic way
-handleArgs :: IO ()                 -- ^ a help message
+handleArgs :: String                -- ^ a help message
            -> ([String] -> Maybe a) -- ^ a parser to make the list of 
                                     --   args into something useful
            -> (a -> IO ())          -- ^ what to do with that value 
@@ -344,10 +344,10 @@ handleArgs :: IO ()                 -- ^ a help message
 handleArgs msg parser f = do
     args <- getArgs
     if helpFlagPresent args
-        then msg
+        then putStrLn msg
         else case parser args of
             Just v -> f v
-            _      -> msg
+            _      -> putStrLn msg
 
     where
         helpFlagPresent :: [String] -> Bool

@@ -7,11 +7,10 @@ main :: IO ()
 main = handleArgs usage parseArgs $ \(srcs, dst) ->
     forM_ srcs $ \src -> copy src dst
 
-usage :: IO ()
-usage = putStrLn $ unlines
-    [ "usage: s3cp <path> ... bucket:[<path>]"
-    , "       s3cp <bucket:path> ... <path>  "
-    ]
+usage :: String
+usage = unlines [ "usage: s3cp <path> ... bucket:[<path>]"
+                , "       s3cp <bucket:path> ... <path>  "
+                ]
 
 parseArgs :: [String] -> Maybe ([Arg], Arg)
 parseArgs []   = Nothing
@@ -27,6 +26,6 @@ parseArgs args = do
 
 copy :: Arg -> Arg -> IO ()
 copy (R remote) (L local ) = withConnection $ \aws -> pullObject aws remote local
-copy (L local ) (R remote) = withConnection $ \aws -> pushObject conn local remote
-copy (R from  ) (R to    ) = withConnection $ \aws -> copyRemote conn from to
+copy (L local ) (R remote) = withConnection $ \aws -> pushObject aws local remote
+copy (R from  ) (R to    ) = withConnection $ \aws -> copyRemote aws from to
 copy _          _          = errorInvalidArgs

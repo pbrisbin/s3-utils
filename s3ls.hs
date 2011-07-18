@@ -7,8 +7,8 @@ import Control.Monad (guard)
 main :: IO ()
 main = handleArgs usage parseArgs $ mapM_ ls
 
-usage :: IO ()
-usage = putStrLn "usage: s3ls <bucket:[path]> ..."
+usage :: String
+usage = "usage: s3ls <bucket:[path]> ..."
 
 -- ls for remote dirs only
 parseArgs :: [String] -> Maybe [Remote]

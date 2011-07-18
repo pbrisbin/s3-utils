@@ -7,8 +7,8 @@ main :: IO ()
 main = handleArgs usage parseArgs $ \(srcs, dst) ->
     forM_ srcs $ \src -> move src dst
 
-usage :: IO ()
-usage = putStrLn "s3mv <bucket:[path]> <bucket:[path]>"
+usage :: String
+usage = "s3mv <bucket:[path]> <bucket:[path]>"
 
 parseArgs :: [String] -> Maybe ([Arg], Arg)
 parseArgs []   = Nothing
