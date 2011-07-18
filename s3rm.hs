@@ -1,14 +1,10 @@
 module Main where
 
 import Network.AWS.AWSConnection
-import Network.AWS.S3Bucket
-import Network.AWS.S3Object
 import Network.AWS.Utils
 
 import Control.Monad (guard)
 import System.IO     (hPutStrLn, stderr)
-
-import qualified Data.ByteString.Lazy.Char8 as L8
 
 main :: IO ()
 main = handleArgs usage parseArgs $ mapM_ rm
@@ -31,24 +27,8 @@ parseArgs args = do
         unRemote _          = undefined
 
 rm :: Remote -> IO ()
-rm remote@(Remote b fp) = do
+rm remote = do
     mconn <- amazonS3ConnectionFromEnv
     case mconn of
-        Just conn -> do
-            if null fp
-                then do -- remove the whole bucket
-                    resp <- emptyBucket conn b
-                    handleError resp $ \_ -> do
-                        resp' <- deleteBucket conn b
-                        handleError resp' $ \_ -> putStrLn $ "removed: " ++ b ++ ":"
-                else do -- remove the file/dir
-                    isDirectory <- remoteIsDirectory conn remote
-                    if isDirectory
-                        then do
-                            remotes <- remoteListDirectory conn remote
-                            mapM_ rm remotes
-                        else do
-                            resp'' <- deleteObject conn $ S3Object b fp "" [] (L8.pack "")
-                            handleError resp'' $ \_ -> putStrLn $ "removed: " ++ b ++ ":" ++ fp
-
-        _ -> hPutStrLn stderr errorEnvNotSet
+        Just conn -> removeRemote conn remote
+        _         -> hPutStrLn stderr errorEnvNotSet

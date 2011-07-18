@@ -1,16 +1,21 @@
 module Network.AWS.Utils
-    ( 
-    -- * Types
-      Bucket
+    ( Bucket
     , Local(..)
     , Remote(..)
     , Arg(..)
 
-    -- * Actions
-    , putFile
-    , putDirectory
-    , getFile
-    , getDirectory
+    -- * Local <-> Remote actions
+    , pushObject
+    , pullObject
+
+    -- * Remote actions
+    , copyRemote
+    , moveRemote
+    , removeRemote
+
+    -- * List actions
+    , remoteIsDirectory
+    , remoteListDirectory
     , listDirectory
 
     -- * Argument helpers
@@ -19,11 +24,6 @@ module Network.AWS.Utils
     , allSame
     , allLocal
     , allRemote
-    , sameAs
-
-    -- * Remote helpers
-    , remoteIsDirectory
-    , remoteListDirectory
 
     -- * Error helpers
     , handleError
@@ -37,7 +37,7 @@ import Network.AWS.S3Object
 import Network.AWS.S3Bucket
 
 import Control.Exception  (IOException, handle)
-import Control.Monad      (forM_, when, unless)
+import Control.Monad      (forM, forM_)
 import Data.Char          (toLower)
 import Data.List          (isPrefixOf)
 import System.Environment (getArgs)
@@ -52,118 +52,205 @@ import qualified Data.ByteString.Lazy.Char8 as L8
 
 type Bucket = String
 
--- | A file or directory on the local system
 data Local = Local { filePath :: FilePath }
 
--- | A file \"in the cloud\"
 data Remote = Remote
     { bucket :: Bucket
     , path   :: FilePath
     }
 
--- | Any argument to a file processing command
 data Arg = L Local | R Remote
 
-putFile :: AWSConnection
-        -> Local  -- ^ known to be a file
-        -> Remote -- ^ existing directory or new filename
-        -> IO ()
-putFile aws l@(Local fpFrom) (Remote b "") = do
-    -- an empty bucket path should place file at top level
-    let fpTo = baseName fpFrom
-    putFile aws l (Remote b fpTo)
-
-putFile aws (Local fpFrom) r@(Remote b fpTo) = handle skip $ do
-    fpTo' <- do
-        isDirectory <- remoteIsDirectory aws r
-        if isDirectory
-            then return $ if fpFrom == "-"
-                then fpTo </> "stdin.txt"
-                else fpTo </> baseName fpFrom
-            else return fpTo
-
-    obj <- do
-        fileData <- if fpFrom == "-"
-            then B.getContents -- stdin
-            else B.readFile fpFrom
-        return S3Object
-            { obj_bucket   = b
-            , obj_name     = fpTo'
-            , content_type = getMimeType fpFrom
-            , obj_headers  = []
-            , obj_data     = fileData
-            }
-
-    resp <- sendObject aws obj
-
-    handleError resp $ \_ -> putStrLn $ fpFrom ++ " -> " ++ b ++ ":" ++ fpTo'
-    
-getFile :: AWSConnection
-        -> Remote -- ^ known to be a file
-        -> Local  -- ^ existing directory or new filename
-        -> IO ()
-getFile aws (Remote b fpFrom) (Local fpTo) = handle skip $ do
-    fpTo' <- do
-        isDirectory <- doesDirectoryExist fpTo
-        if fpTo /= "-" && isDirectory
-            then return $ fpTo </> baseName fpFrom
-            else return fpTo
-
-    resp <- getObject aws $ S3Object b fpFrom "" [] (L8.pack "")
-
-    handleError resp $ \obj' -> do
-        if fpTo == "-"
-            then B.putStr (obj_data obj')
-            else do
-                B.writeFile fpTo' (obj_data obj')
-                putStrLn $ b ++ ":" ++ fpFrom ++ " -> " ++ fpTo'
-
-getDirectory :: AWSConnection
-             -> Remote -- ^ known to be a directory
-             -> Local  -- ^ interpreted as a directory, can exist or not
-             -> IO ()
-getDirectory aws r@(Remote _ fpFrom) (Local fpTo) = handle skip $ do
-    -- copying a directory to a file is invalid usage
-    isFile <- doesFileExist fpTo
-    when isFile $ hPutStrLn stderr errorInvalidArgs
-
-    -- directory exists
-    isDirectory <- doesDirectoryExist fpTo
-    when isDirectory $ do
-        remotes <- remoteListDirectory aws r
-        forM_ remotes $ \remote ->
-            go aws remote $ fpTo </> path remote
-        
-    -- directory does not exist
-    unless (isFile || isDirectory) $ do
-        remotes <- remoteListDirectory aws r
-        forM_ remotes $ \remote ->
-            go aws remote $ fpTo </> stripLeadingSlash (stripPrefix fpFrom fpTo)
+-- | Upload a local file or directory
+--
+--   If the source is a file, the basename is copied to the destination. 
+--
+--   When the destination is blank, it is copied to the top level of the 
+--   bucket. If the destination exists and is a file it is overwritten. 
+--   When the destination exists and is a directory the file is copied 
+--   into it. When the destination does not exist, the file is created 
+--   there.
+--
+--   If the source is a directory, its contents are copied recursively.
+--
+--   When the destination is blank, it is copied to the top level of the 
+--   bucket. If the destination exists and is a directory, the source 
+--   directory is copied into it. If the destination does not exist, it 
+--   is created as a directory and the source directory's contents are 
+--   copied into it. If the destination exists and is a file... I'm not 
+--   sure what will happen.
+--
+pushObject :: AWSConnection -> Local -> Remote -> IO ()
+pushObject aws local@(Local fp) remote = do
+    isDirectory <- doesDirectoryExist fp
+    if isDirectory
+        then pushFile      local remote
+        else pushDirectory local remote
 
     where
+        pushFile :: Local -> Remote -> IO ()
+        pushFile l@(Local fpFrom)   (Remote b ""  ) = pushFile l $ Remote b $ baseName fpFrom
+        pushFile   (Local fpFrom) r@(Remote b fpTo) =
+            handle skip $ do
+                isDirectory <- remoteIsDirectory aws r
+
+                let f = if isDirectory
+                            then if fpFrom == "-"
+                                then fpTo </> "stdin.txt"
+                                else fpTo </> baseName fpFrom
+                            else fpTo
+
+                let c = if fpFrom == "-"
+                            then getMimeType f
+                            else getMimeType fpFrom
+
+                fileData <- if fpFrom == "-"
+                    then B.getContents -- stdin
+                    else B.readFile fpFrom
+
+                resp <- sendObject aws S3Object
+                    { obj_bucket   = b
+                    , obj_name     = f
+                    , content_type = c
+                    , obj_headers  = []
+                    , obj_data     = fileData
+                    }
+
+                handleError resp $ \_ -> putStrLn $ fpFrom ++ " -> " ++ b ++ ":" ++ f
+
+        pushDirectory :: Local -> Remote -> IO ()
+        pushDirectory l@(Local fpFrom)   (Remote b ""  ) = pushDirectory l $ Remote b $ baseName fpFrom
+        pushDirectory   (Local fpFrom) r@(Remote b fpTo) = do
+            isDirectory <- remoteIsDirectory aws r
+            if isDirectory
+                then mapDirectory fpFrom $ \f -> pushFile (Local f) r
+                else mapDirectory fpFrom $ \f -> do
+                    -- merge the full paths so the final pathnames make 
+                    -- sense for what we're tryign to do
+                    let dst = fpTo </> stripLeadingSlash (stripPrefix fpFrom f)
+                    pushFile (Local f) (Remote b dst)
+
+pullObject :: AWSConnection -> Remote -> Local -> IO ()
+pullObject aws remote local = do
+    isDirectory <- remoteIsDirectory aws remote
+    if isDirectory
+        then pullDirectory remote local
+        else pullFile      remote local
+
+    where
+        pullFile :: Remote -> Local -> IO ()
+        pullFile (Remote b fpFrom) (Local fpTo) =
+            handle skip $ do
+                isDirectory <- doesDirectoryExist fpTo
+
+                let f = if isDirectory
+                            then fpTo </> baseName fpFrom
+                            else fpTo
+
+                resp <- getObject aws $ S3Object b fpFrom "" [] (L8.pack "")
+
+                handleError resp $ \o -> do
+                    if fpTo == "-"
+                        then B.putStr (obj_data o)
+                        else do
+                            B.writeFile f (obj_data o)
+                            putStrLn $ b ++ ":" ++ fpFrom ++ " -> " ++ f
+
+        pullDirectory :: Remote -> Local -> IO ()
+        pullDirectory r@(Remote _ fpFrom) (Local fpTo) =
+            handle skip $ do
+                isDirectory <- doesDirectoryExist fpTo
+                if isDirectory
+                    then do -- directory exists
+                        remotes <- remoteListDirectory aws r
+                        forM_ remotes $ \r' ->
+                            go remote $ fpTo </> path r'
+
+                    else do -- directory does not exist
+                        remotes <- remoteListDirectory aws r
+                        forM_ remotes $ \_ ->
+                            go remote $ fpTo </> stripLeadingSlash (stripPrefix fpFrom fpTo)
+
         -- factor common logic
-        go ::  AWSConnection -> Remote -> FilePath -> IO ()
-        go aws' remote' dst' = do
+        go ::  Remote -> FilePath -> IO ()
+        go remote' dst' = do
             let (dir,_) = splitFileName dst'
             createDirectoryIfMissing True dir
-            getFile aws' remote' (Local dst')
+            pullFile remote' (Local dst')
 
-putDirectory :: AWSConnection
-             -> Local  -- ^ known to be a directory
-             -> Remote -- ^ interpreted as a directory, can exist or not
-             -> IO ()
-putDirectory aws l@(Local fpFrom) (Remote b "") = do
-    -- empty bucket should place the directory at top level
-    let fpTo = baseName fpFrom
-    putDirectory aws l (Remote b fpTo)
-    
-putDirectory aws (Local fpFrom) r@(Remote b fpTo) = do
-    isDirectory <- remoteIsDirectory aws r
+-- | Copy a remote directory or file
+copyRemote :: AWSConnection -> Remote -> Remote -> IO ()
+copyRemote aws from to = handle skip $ do
+    fromTos <- do
+        isDirectory <- remoteIsDirectory aws to
+        if isDirectory
+            then setupDirCopy  from to
+            else setupFileCopy from to
+
+    forM_ fromTos $ \(src, dst) -> do
+        resp <- copyObjectWithReplace aws src dst
+
+        handleError resp $ \_ -> putStrLn $
+            (obj_bucket src) ++ ":" ++ (obj_name src) ++ "->" ++
+            (obj_bucket dst) ++ ":" ++ (obj_name dst)
+
+    where
+        -- setup a list of source and destination objects when the 
+        -- source for the copy is a directory
+        setupDirCopy :: Remote -> Remote -> IO [(S3Object, S3Object)]
+        setupDirCopy f@(Remote bFrom fpFrom) t@(Remote _ fpTo) = do
+            isDirectory <- remoteIsDirectory   aws t
+            remotes     <- remoteListDirectory aws f
+
+            forM remotes $ \_ -> do
+                fpTo' <- if isDirectory
+                    then return $ fpTo </> fpFrom
+                    else return $ fpTo </> stripLeadingSlash (stripPrefix fpFrom fpTo)
+
+                let srcObj = S3Object bFrom fpFrom "" [] (L8.pack "")
+                let dstObj = S3Object bFrom fpTo'  "" [] (L8.pack "")
+
+                return (srcObj, dstObj)
+             
+        -- setup a list of source and desitination objects when the 
+        -- source for the copy is a file
+        setupFileCopy :: Remote -> Remote -> IO [(S3Object, S3Object)]
+        setupFileCopy (Remote bFrom fpFrom) r@(Remote _ fpTo) = do
+            fpTo' <- if fpTo == ""
+                then return $ baseName fpFrom
+                else do
+                    isDirectory <- remoteIsDirectory aws r
+                    if isDirectory
+                        then return $ fpTo </> baseName fpFrom
+                        else return fpTo
+
+            let srcObj = S3Object bFrom fpFrom "" [] (L8.pack "")
+            let dstObj = S3Object bFrom fpTo'  "" [] (L8.pack "")
+
+            return [(srcObj, dstObj)]
+
+-- | Move a remote directory or file; it's just copy-then-remove
+moveRemote :: AWSConnection -> Remote -> Remote -> IO ()
+moveRemote aws rFrom rTo = copyRemote aws rFrom rTo >> removeRemote aws rFrom
+
+-- | Remove a remote bucket, directory or file
+removeRemote :: AWSConnection -> Remote -> IO ()
+removeRemote aws (Remote b "") = handle skip $ do
+    resp <- emptyBucket aws b
+    handleError resp $ \_ -> do
+        resp' <- deleteBucket aws b
+        handleError resp' $ \_ -> putStrLn $ "removed: " ++ b ++ ":"
+
+removeRemote aws remote@(Remote b fp) = handle skip $ do
+    isDirectory <- remoteIsDirectory aws remote
     if isDirectory
-        then mapDirectory fpFrom $ \f -> putFile aws (Local f) r
-        else mapDirectory fpFrom $ \f -> do
-            let dst = fpTo </> stripLeadingSlash (stripPrefix fpFrom f)
-            putFile aws (Local f) (Remote b dst)
+        then do -- remove entire directory
+            remotes <- remoteListDirectory aws remote
+            mapM_ (removeRemote aws) remotes
+
+        else do -- remove file
+            resp'' <- deleteObject aws $ S3Object b fp "" [] (L8.pack "")
+            handleError resp'' $ \_ -> putStrLn $ "removed: " ++ b ++ ":" ++ fp
 
 -- | Test if the remote argument is what we would consider a directory. 
 --   Beware sketchy algorithm ahead...
@@ -176,13 +263,13 @@ remoteIsDirectory aws (Remote b fp) = do
         Right (_, []) -> return False
         Right (_, _ ) -> return True
 
--- | List the contents of a remote directory
+-- | List the contents of a remote directory as @'Remote'@s
 remoteListDirectory :: AWSConnection -> Remote -> IO [Remote]
 remoteListDirectory aws remote@(Remote b _) = do
     results <- listDirectory "" aws remote
     return $ map (Remote b . key) results
 
--- | Factored out for reuse
+-- | Factored out for reuse, returns the raw @'ListResult'@s
 listDirectory :: String -> AWSConnection -> Remote -> IO [ListResult]
 listDirectory m aws remote@(Remote b fp) = do
     let fp' = if null fp then fp else addTrailingSlash fp
@@ -203,7 +290,7 @@ listDirectory m aws remote@(Remote b fp) = do
                     return $ init thisSet ++ nextSet
                 else return thisSet
 
--- | Recursively execute a function on all files in the passed directory
+-- | Recursively execute a function on all files in a local directory
 mapDirectory :: FilePath -> (FilePath -> IO ()) -> IO ()
 mapDirectory dir f = handle skip $ do
     names <- getDirectoryContents dir
@@ -213,25 +300,26 @@ mapDirectory dir f = handle skip $ do
         isDirectory <- doesDirectoryExist p
         if isDirectory then mapDirectory p f else f p
 
--- | Presense of a colon means remote arg, break it; else, it's a local 
---   filepath. TODO: be smarter about that.
+-- | Parse a string argument into either a local or remote filepath by 
+--   looking for the presense of a colon (ie. bucket:path).
 parseArg :: String -> Arg
-parseArg arg = let b = takeWhile (/= ':') arg
-                   len = length b
-               in if len == length arg
-                    then L $ Local arg -- local filepath
-                    else R . Remote b . stripLeadingSlash $ drop (len+1) arg
+parseArg arg =
+    let b   = takeWhile (/= ':') arg
+        len = length b
+    in if len == length arg
+        then L $ Local arg -- local filepath
+        else R . Remote b . stripLeadingSlash $ drop (len + 1) arg
 
--- | Validate that a list of arguments are all local or all remote
+-- | Validate that a list of arguments are all of the same type
 allSame :: [Arg] -> Bool
 allSame []  = True
 allSame [_] = True
 allSame (a:b:rest) = a `sameAs` b && allSame (b:rest)
-
-sameAs :: Arg -> Arg -> Bool
-sameAs (L _) (L _) = True
-sameAs (R _) (R _) = True
-sameAs _     _     = False
+    where
+        sameAs :: Arg -> Arg -> Bool
+        sameAs (L _) (L _) = True
+        sameAs (R _) (R _) = True
+        sameAs _     _     = False
 
 allLocal :: [Arg] -> Bool
 allLocal = all local
