@@ -20,7 +20,7 @@ Downloading files: `s3cp <bucket:path> ... <path>`
 
 Uploading files: `s3cp <path> ... bucket:[<path>]`
 
-Moving remote files/buckets: `s3mv <bucket:[path]> ... <bucket:[path]>` *TODO*
+Moving remote files/buckets: `s3mv <bucket:[path]> ... <bucket:[path]>`
 
 Removing remote files/buckets: `s3rm <bucket:[path]> ...`
 

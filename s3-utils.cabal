@@ -18,6 +18,11 @@ executable s3cp
   ghc-options:   -Wall
   main-is:       s3cp.hs
 
+executable s3mv
+  build-depends: base, containers, directory, filepath, bytestring, hS3
+  ghc-options:   -Wall
+  main-is:       s3mv.hs
+
 executable s3ls
   build-depends: base, containers, directory, filepath, bytestring, hS3
   ghc-options:   -Wall
