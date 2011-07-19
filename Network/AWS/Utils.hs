@@ -154,7 +154,7 @@ pushObject aws local@(Local fp) remote = do
         setHeaders :: FilePath -> IO [(String, String)]
         setHeaders ""  = return []
         setHeaders "-" = return []
-        setHeaders fp  = bracket (openFile fp ReadMode) hClose $ \h -> do
+        setHeaders f   = bracket (openFile f ReadMode) hClose $ \h -> do
             s <- hFileSize h
             return [("Content-Length", show s)]
 
