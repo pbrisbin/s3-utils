@@ -234,7 +234,7 @@ copyRemote aws from to = handle skip $ do
         resp <- copyObjectWithReplace aws src dst
 
         handleError resp $ \_ -> putStrLn $
-            (obj_bucket src) ++ ":" ++ (obj_name src) ++ "->" ++
+            (obj_bucket src) ++ ":" ++ (obj_name src) ++ " -> " ++
             (obj_bucket dst) ++ ":" ++ (obj_name dst)
 
     where
