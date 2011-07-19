@@ -20,7 +20,7 @@ module Network.AWS.Utils
     , Remote(..)
     , withConnection
 
-    -- * Local <-> Remote actions
+    -- * Local-Remote actions
     , pushObject
     , pullObject
 
@@ -154,7 +154,7 @@ pushObject aws local@(Local fp) remote = do
 --   Same rules apply as with @'pushObject'@ regarding directory 
 --   handling except that destination cannot be blank in this case.
 --
---   If the destination exists and is a file, you should receive and 
+--   If the destination exists and is a file, you should receive an 
 --   IOException. Linux will not allow creation of directories with the 
 --   same name as existing files (and vice versa).
 --
