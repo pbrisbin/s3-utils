@@ -1,5 +1,5 @@
 name:          s3-utils
-version:       0.0.0
+version:       0.1.0
 synopsis:      core-utils for an S3 instance
 description:   core-utils for an S3 instance
 license:       GPL
