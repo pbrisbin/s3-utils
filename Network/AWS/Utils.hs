@@ -53,15 +53,15 @@ import Network.AWS.AWSResult
 import Network.AWS.S3Object
 import Network.AWS.S3Bucket
 
-import Control.Exception  (IOException, handle)
+import Control.Exception  (IOException, handle, bracket)
 import Control.Monad      (forM, forM_)
 import Data.Char          (toLower)
 import Data.List          (isPrefixOf)
 import System.Environment (getArgs)
 import System.FilePath    (splitFileName, takeExtension, (</>))
-import System.IO          (hPutStrLn, stderr)
 
 import System.Directory
+import System.IO
 
 import qualified Data.Map                   as M
 import qualified Data.ByteString.Lazy       as B
@@ -123,6 +123,8 @@ pushObject aws local@(Local fp) remote = do
                             then getMimeType f
                             else getMimeType fpFrom
 
+                hdrs <- setHeaders fpFrom
+
                 fileData <- if fpFrom == "-"
                     then B.getContents -- stdin
                     else B.readFile fpFrom
@@ -131,7 +133,7 @@ pushObject aws local@(Local fp) remote = do
                     { obj_bucket   = b
                     , obj_name     = f
                     , content_type = c
-                    , obj_headers  = []
+                    , obj_headers  = hdrs
                     , obj_data     = fileData
                     }
 
@@ -148,6 +150,13 @@ pushObject aws local@(Local fp) remote = do
                     -- sense for what we're tryign to do
                     let dst = fpTo </> stripLeadingSlash (stripPrefix fpFrom f)
                     pushFile (Local f) (Remote b dst)
+
+        setHeaders :: FilePath -> IO [(String, String)]
+        setHeaders ""  = return []
+        setHeaders "-" = return []
+        setHeaders fp  = bracket (openFile fp ReadMode) hClose $ \h -> do
+            s <- hFileSize h
+            return [("Content-Length", show s)]
 
 -- | Download a file or directory from S3
 --
