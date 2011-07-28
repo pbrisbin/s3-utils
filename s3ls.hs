@@ -26,13 +26,12 @@ parseArgs args = do
 ls :: Remote -> IO ()
 ls remote@(Remote _ fp) = withConnection $ \aws -> do
     isDirectory <- remoteIsDirectory aws remote
-    results <- if null fp || isDirectory
-        then listDirectory "" aws remote
-        else do
-            resp <- listDirectory "" aws remote
-            return $ filter ((== fp) . key) resp
 
-    mapM_ prettyResult results
+    let filt = if null fp || isDirectory
+        then id else filter ((== fp) . key)
+
+    resp <- listDirectory "" aws remote
+    mapM_ prettyResult $ filt resp
 
 prettyResult :: ListResult -> IO ()
 prettyResult (ListResult k m e s _) = putStrLn $ unwords [ m, e, prettySize s, k ]
@@ -53,7 +52,5 @@ prettyResult (ListResult k m e s _) = putStrLn $ unwords [ m, e, prettySize s, k
         pad :: Int -> String -> String
         pad lim str
             | length str > lim = take (lim - 3) str ++ "..."
-            | otherwise        = let len = length str in
-                if length str < lim
-                    then replicate (lim - len) ' ' ++ str
-                    else str
+            | length str < lim = replicate (lim - length str) ' ' ++ str
+            | otherwise        = str
