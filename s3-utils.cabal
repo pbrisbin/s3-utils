@@ -10,27 +10,27 @@ cabal-version: >=1.6
 
 library
   build-depends:   base, containers, directory, filepath, bytestring, hS3
-  ghc-options:     -Wall
+  ghc-options:     -static -Wall
   exposed-modules: Network.AWS.Utils
 
 executable s3cp
   build-depends: base, containers, directory, filepath, bytestring, hS3
-  ghc-options:   -Wall
+  ghc-options:   -static -Wall
   main-is:       s3cp.hs
 
 executable s3mv
   build-depends: base, containers, directory, filepath, bytestring, hS3
-  ghc-options:   -Wall
+  ghc-options:   -static -Wall
   main-is:       s3mv.hs
 
 executable s3ls
   build-depends: base, containers, directory, filepath, bytestring, hS3
-  ghc-options:   -Wall
+  ghc-options:   -static -Wall
   main-is:       s3ls.hs
 
 executable s3rm
   build-depends: base, containers, directory, filepath, bytestring, hS3
-  ghc-options:   -Wall
+  ghc-options:   -static -Wall
   main-is:       s3rm.hs
 
 source-repository head
