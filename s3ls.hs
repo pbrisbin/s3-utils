@@ -28,7 +28,7 @@ ls remote@(Remote _ fp) = withConnection $ \aws -> do
     isDirectory <- remoteIsDirectory aws remote
 
     let filt = if null fp || isDirectory
-        then id else filter ((== fp) . key)
+                 then id else filter ((== fp) . key)
 
     resp <- listDirectory "" aws remote
     mapM_ prettyResult $ filt resp
